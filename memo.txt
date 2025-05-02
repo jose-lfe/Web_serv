@@ -1,0 +1,74 @@
+Bien sûr ! Les macros FD_SET, FD_CLR, FD_ISSET et FD_ZERO sont utilisées avec la fonction select() en C pour la gestion d'I/O multiplexées (c’est-à-dire surveiller plusieurs descripteurs de fichiers à la fois, comme plusieurs sockets). Elles permettent de manipuler un type particulier appelé fd_set.
+
+Voici ce que chacune fait :
+
+🔹 fd_set
+C’est une structure opaque qui représente un ensemble de descripteurs de fichiers. Elle est utilisée pour dire à select() quels descripteurs on veut surveiller pour la lecture, l’écriture, ou les erreurs.
+
+🔹 FD_ZERO(fd_set *set)
+Ce que ça fait : réinitialise l’ensemble, c’est-à-dire qu’il vide la liste des descripteurs surveillés.
+
+Utilisation :
+
+c
+Copy
+Edit
+fd_set read_fds;
+FD_ZERO(&read_fds);  // initialise read_fds à vide
+🔹 FD_SET(int fd, fd_set *set)
+Ce que ça fait : ajoute un descripteur fd à l’ensemble set.
+
+Utilisation :
+
+c
+Copy
+Edit
+FD_SET(socket_fd, &read_fds);  // ajoute socket_fd à la liste à surveiller
+🔹 FD_CLR(int fd, fd_set *set)
+Ce que ça fait : supprime le descripteur fd de l’ensemble set.
+
+Utilisation :
+
+c
+Copy
+Edit
+FD_CLR(socket_fd, &read_fds);  // retire socket_fd de la liste
+🔹 FD_ISSET(int fd, fd_set *set)
+Ce que ça fait : vérifie si fd est présent dans set.
+
+Utilisation :
+
+c
+Copy
+Edit
+if (FD_ISSET(socket_fd, &read_fds)) {
+    // socket_fd est prêt à lire
+}
+🔹 Exemple simple d'utilisation avec select() :
+c
+Copy
+Edit
+fd_set read_fds;
+int max_fd = socket_fd;
+
+FD_ZERO(&read_fds);
+FD_SET(socket_fd, &read_fds);
+
+int activity = select(max_fd + 1, &read_fds, NULL, NULL, NULL);
+if (activity < 0) {
+    perror("select error");
+}
+
+if (FD_ISSET(socket_fd, &read_fds)) {
+    // Il y a une activité (ex: un client essaie de se connecter)
+}
+Pourquoi c’est utile :
+Ces macros sont très simples mais fondamentales pour comprendre comment gérer plusieurs connexions sans threads ni epoll. Cela fait partie des fondamentaux des serveurs réseaux bas-niveau.
+
+Souhaites-tu un petit schéma ou exemple complet d’un serveur utilisant select() ?
+
+
+GET /index.html HTTP/1.1
+Host: localhost:8080
+User-Agent: curl/7.81.0
+Accept: */*
