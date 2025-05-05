@@ -189,3 +189,5 @@ int main() {
     printConfig(servers);
     return 0;
 }
+
+//g++ -std=c++98 -Wall -Wextra -Werror -o parser_gpt parsing_gpt.cpp

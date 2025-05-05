@@ -1,0 +1,140 @@
+explique moi le fonctionnent de CGI et ce qu'il faut mettre en place dans Web_serv pour que ca fonctionne
+
+
+ChatGPT said:
+Très bonne question : la gestion du CGI (Common Gateway Interface) dans un serveur HTTP comme Webserv est un passage clé pour permettre l'exécution de programmes externes (comme des scripts Python, PHP, etc.) et de renvoyer leur sortie comme réponse HTTP.
+
+🔹 1. Qu'est-ce que le CGI ?
+CGI est une interface standard entre un serveur HTTP (comme Webserv) et un programme externe exécutable (comme un script Python ou un binaire C).
+
+Quand une requête arrive sur une URL spécifique (ex: /cgi-bin/script.py), le serveur :
+
+Lance un programme externe.
+
+Lui passe les informations de la requête via des variables d’environnement + entrée standard (stdin).
+
+Récupère sa sortie standard (stdout), qui est ensuite renvoyée au client HTTP.
+
+🔹 2. Fonctionnement résumé
+Requête HTTP reçue (souvent POST ou GET).
+
+Le serveur détecte que l'URL cible un fichier CGI (ex: .py, .php...).
+
+Le serveur :
+
+Crée un processus enfant (avec fork).
+
+Configure les pipes pour rediriger stdin et stdout.
+
+Remplit les variables d’environnement (comme REQUEST_METHOD, CONTENT_LENGTH, etc.).
+
+Utilise execve pour exécuter le script.
+
+Le serveur lit la sortie du script (depuis stdout) → réponse HTTP.
+
+Il renvoie cette sortie au client HTTP.
+
+🔹 3. À implémenter dans Webserv (niveau école 42)
+🔸 a. Configuration .conf :
+Tu dois permettre dans la config .conf des blocs comme :
+
+nginx
+Copy
+Edit
+route /cgi-bin/ {
+    cgi_extension .py;
+    cgi_path /usr/bin/python3;
+}
+Ici :
+
+cgi_extension : indique les fichiers à traiter comme CGI.
+
+cgi_path : indique l’interpréteur à utiliser (/usr/bin/python3, /usr/bin/php, etc.).
+
+🔸 b. Détection CGI dans le code
+Dans le traitement des requêtes HTTP, il faut :
+
+Repérer que le chemin cible correspond à une route avec cgi_extension.
+
+Vérifier l’extension du fichier demandé (ex: .py).
+
+🔸 c. Exécution du script
+Voici les grandes étapes à coder :
+
+1. Créer un pipe
+cpp
+Copy
+Edit
+int in_pipe[2], out_pipe[2];
+pipe(in_pipe);   // pour envoyer le body dans stdin
+pipe(out_pipe);  // pour lire la sortie stdout
+2. Forker
+cpp
+Copy
+Edit
+pid_t pid = fork();
+3. Dans le fils :
+cpp
+Copy
+Edit
+dup2(in_pipe[0], STDIN_FILENO);
+dup2(out_pipe[1], STDOUT_FILENO);
+close(...); // fermer les extrémités inutiles
+
+// Construire l'environnement :
+char* envp[] = {
+    (char*)"REQUEST_METHOD=GET",
+    (char*)"SCRIPT_FILENAME=path/to/script.py",
+    ...
+    NULL
+};
+
+// Préparer les arguments :
+char* argv[] = {(char*)"/usr/bin/python3", (char*)"path/to/script.py", NULL};
+
+execve("/usr/bin/python3", argv, envp);
+4. Dans le parent :
+Écrire dans in_pipe[1] si c'est un POST (pour envoyer le body).
+
+Lire la sortie depuis out_pipe[0].
+
+Attendre la fin du script (waitpid(pid, ...)).
+
+Renvoyer la sortie comme réponse HTTP (attention à bien parser les headers que le script renvoie).
+
+🔸 d. Variables d’environnement à passer
+Variable	Rôle
+REQUEST_METHOD	"GET" ou "POST"
+CONTENT_LENGTH	Longueur du body (POST)
+CONTENT_TYPE	Type du contenu (ex: application/x-www-form-urlencoded)
+SCRIPT_FILENAME	Chemin complet du script
+QUERY_STRING	Pour GET (les arguments dans l’URL)
+SERVER_PROTOCOL	"HTTP/1.1"
+REDIRECT_STATUS	Souvent 200 pour PHP-CGI
+
+🔹 4. Exemple concret
+Supposons que tu reçoives :
+
+bash
+Copy
+Edit
+GET /cgi-bin/hello.py HTTP/1.1
+Ton serveur doit :
+
+Repérer que c’est un CGI (par config + extension).
+
+Forker un processus.
+
+Lancer /usr/bin/python3 hello.py.
+
+Lire la sortie :
+
+http
+Copy
+Edit
+Content-Type: text/html
+
+<html><body>Hello world</body></html>
+Et renvoyer ça au client HTTP.
+
+Souhaites-tu que je t’écrive le code C++ exact de cette gestion CGI (exécution + récupération de stdout) ?
