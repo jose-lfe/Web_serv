@@ -1,0 +1,65 @@
+Comportement des directives en l'absence de certaines d'entre elles
+Voici un aperçu des directives courantes dans un bloc server et de leur comportement si elles sont omises :
+
+1. listen
+Obligatoire ? Non.
+
+Comportement si absente : Par défaut, Nginx écoute sur le port 80 pour les connexions HTTP.
+
+2. server_name
+Obligatoire ? Non.
+
+Comportement si absente : Nginx utilise une chaîne vide comme nom de serveur. Cela signifie 
+que le bloc server peut servir de serveur par défaut pour les requêtes ne correspondant 
+à aucun autre server_name.
+
+3. root
+Obligatoire ? Non.
+
+Comportement si absente : Si non spécifiée, Nginx hérite de la directive root définie dans 
+un contexte supérieur, comme le bloc http. Si aucune directive root n'est définie, les 
+requêtes peuvent échouer avec une erreur 404. 
+Sling Academy
+
+4. index
+Obligatoire ? Non.
+
+Comportement si absente : Nginx utilise une valeur par défaut, généralement index.html. Si 
+ce fichier n'existe pas dans le répertoire racine, une erreur 403 ou 404 peut être retournée.
+
+5. location
+Obligatoire ? Non.
+
+Comportement si absente : Si aucun bloc location n'est défini, Nginx applique les directives 
+du bloc server à toutes les requêtes. Cependant, certaines directives, comme proxy_pass, 
+doivent être placées à l'intérieur d'un bloc location pour fonctionner correctement. 
+
+
+6. error_page
+Obligatoire ? Non.
+
+Comportement si absente : Nginx utilise ses pages d'erreur par défaut pour les codes HTTP 
+tels que 404 ou 500. Ces pages peuvent être personnalisées en définissant la directive error_page. 
+
+
+7. default_server
+Obligatoire ? Non.
+
+Comportement si absente : Si plusieurs blocs server écoutent sur le même port, celui marqué 
+avec default_server sera utilisé pour les requêtes ne correspondant à aucun server_name. 
+S'il n'y a pas de default_server, Nginx utilise le premier bloc server défini pour ce port. 
+
+
+Bonnes pratiques
+Utiliser server_name _; pour un serveur par défaut : Cela permet de créer un bloc server 
+qui attrape toutes les requêtes non spécifiquement définies, souvent utilisé pour 
+retourner une erreur 404 ou 444.
+
+Placer les directives au bon niveau : Certaines directives, comme proxy_pass, 
+doivent être placées dans un bloc location pour fonctionner correctement. Les 
+directives définies dans des contextes supérieurs sont héritées par les 
+contextes inférieurs, sauf si elles sont redéfinies. 
+
+Éviter l'utilisation excessive de la directive if : Son comportement peut 
+être non intuitif et entraîner des erreurs. Il est souvent préférable 
+d'utiliser d'autres directives comme map ou try_files. 

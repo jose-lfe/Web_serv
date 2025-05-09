@@ -191,3 +191,11 @@ int main() {
 }
 
 //g++ -std=c++98 -Wall -Wextra -Werror -o parser_gpt parsing_gpt.cpp
+
+
+/*
+check:
+
+si le config a juste port et pas de host.
+si les brackets sont fermer. 
+*/
