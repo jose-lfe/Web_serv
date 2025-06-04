@@ -95,7 +95,7 @@ bool endsWith(const std::string& str, const std::string& suffix) {
 
 std::string exec_cgi(const HandleRequest& req)
 {
-    std::string scriptPath = "/home/jose-lfe/projects/web/work/www" + req.path;
+    std::string scriptPath = "/home/jose-lfe/projects/web/with_cgi/www" + req.path;
     std::string interpreter = "/usr/bin/php-cgi";
     std::string newbody;
 
@@ -142,6 +142,7 @@ std::string exec_cgi(const HandleRequest& req)
         ssize_t written = write(in_pipe[1], req.body.c_str(), req.body.size());
         if (written < 0) perror("write to CGI stdin");
     }
+    std::cerr << "Body size: " << req.body.size() << " / Content-Length: " << getHeaderValue(req.headers, "Content-Length") << std::endl; // pour debug
     close(in_pipe[1]);
 
     // Lis la sortie du CGI
@@ -179,186 +180,6 @@ std::string exec_cgi(const HandleRequest& req)
     }
     return buildHttpResponse("200 OK", contentType, body);
 }
-
-// std::string exec_cgi(const HandleRequest& req)
-// {
-//     std::string scriptPath = "/home/jose-lfe/projects/web/work/www" + req.path;
-//     std::string interpreter = "/usr/bin/php";
-// 	std::string newbody;
-// 	int fdin = dup(STDIN_FILENO);
-// 	int fdout = dup(STDOUT_FILENO);
-
-//     std::vector<std::string> env_vec = buildCgiEnv(req, scriptPath);
-//     std::vector<char*> envp;
-//     for (size_t i = 0; i < env_vec.size(); ++i) {
-
-//         envp.push_back(const_cast<char*>(env_vec[i].c_str()));
-//         std::cout << "env_vec[" << i << "]: " << env_vec[i] << std::endl; // pour debug
-//     }
-//     envp.push_back(NULL);
-
-//     char* argv[3];
-//     argv[0] = const_cast<char*>(interpreter.c_str());
-//     argv[1] = const_cast<char*>(scriptPath.c_str());
-//     argv[2] = NULL;
-
-// 	FILE *fIn = tmpfile();
-// 	FILE *fOut = tmpfile();
-// 	long fdIn = fileno(fIn);
-// 	long fdOut = fileno(fOut);
-// 	int ret = 1;
-
-//     std::cerr << "Body size: " << req.body.size() << " / Content-Length: " << getHeaderValue(req.headers, "Content-Length") << std::endl; // pour debug
-
-//     write(fdIn, req.body.c_str(), req.body.size());
-// 	lseek(fdIn, 0, SEEK_SET);
-
-//     std::ofstream debugOut("/tmp/debug_cgi_body.bin", std::ios::binary);
-//     debugOut.write(req.body.c_str(), req.body.size());
-//     debugOut.close();
-
-//     pid_t pid = fork();
-//     if (pid < 0) {
-//         perror("fork");
-//         return buildHttpResponse("500 Internal Server Error", "text/plain", "Fork error");
-//     }
-
-//     if (pid == 0) {
-//         // Enfant
-//         dup2(fdIn, STDIN_FILENO);
-// 		dup2(fdOut, STDOUT_FILENO);
-// 		execve(interpreter.c_str(), argv, envp.data());
-// 		std::cerr << "Execution failed" << std::endl;
-// 		write(STDOUT_FILENO, "Code 500\n", 10);
-// 		exit(1);
-//     }
-//     char buffer[1000];
-//     waitpid(-1, NULL, 0);
-//     lseek(fdOut, 0, SEEK_SET);
-//     ret = 1;
-//     while (ret > 0)
-//     {
-//         memset(buffer, 0, 1000);
-//         ret = read(fdOut, buffer, 1000 - 1);
-//         newbody += buffer;
-//     }
-
-//     // Parent
-// 	dup2(fdin, STDIN_FILENO);
-// 	dup2(fdout, STDOUT_FILENO);
-// 	fclose(fIn);
-// 	fclose(fOut);
-// 	close(fdIn);
-// 	close(fdOut);
-// 	close(fdin);
-// 	close(fdout);
-
-//     std::string headers, body;
-//     size_t pos = newbody.find("\r\n\r\n");
-//     if (pos != std::string::npos) {
-//         headers = newbody.substr(0, pos);
-//         body = newbody.substr(pos + 4);
-//     } else {
-//         body = newbody;
-//     }
-
-//     std::string contentType = "text/html";
-//     std::istringstream hstream(headers);
-//     std::string line;
-//     while (std::getline(hstream, line)) {
-//         if (line.find("Content-Type:") == 0) {
-//             contentType = line.substr(13);
-//             while (!contentType.empty() && (contentType[0] == ' ' || contentType[0] == '\t'))
-//                 contentType.erase(0, 1);
-//             if (!contentType.empty() && contentType.back() == '\r')
-//                 contentType.pop_back();
-//             break;
-//         }
-//     }
-//     return buildHttpResponse("200 OK", contentType, body);
-// }
-
-// std::string exec_cgi(const HandleRequest& req)
-// {
-//     std::string scriptPath = "www" + req.path; // adapte selon ta logique
-//     std::string interpreter = "/usr/bin/php";  // adapte selon ta config
-
-//     std::vector<std::string> env_vec = buildCgiEnv(req, scriptPath);
-//     std::vector<char*> envp;
-//     for (size_t i = 0; i < env_vec.size(); ++i)
-//         envp.push_back(const_cast<char*>(env_vec[i].c_str()));
-//     envp.push_back(NULL);
-
-//     char* argv[3];
-//     argv[0] = const_cast<char*>(interpreter.c_str());
-//     argv[1] = const_cast<char*>(scriptPath.c_str());
-//     argv[2] = NULL;
-
-//     int in_pipe[2], out_pipe[2];
-//     pipe(in_pipe);
-//     pipe(out_pipe);
-
-//     pid_t pid = fork();
-//     if (pid == 0) {
-//         dup2(in_pipe[0], 0);
-//         dup2(out_pipe[1], 1);
-//         close(in_pipe[1]);
-//         close(out_pipe[0]);
-//         execve(interpreter.c_str(), argv, envp.data());
-//         perror("execve");
-//         exit(1);
-//     }
-
-//     close(in_pipe[0]);
-//     close(out_pipe[1]);
-
-//     if (req.method == "POST" && !req.body.empty()) {
-//         write(in_pipe[1], req.body.c_str(), req.body.size());
-// 		std::cout << "POST body sent to CGI script: " << req.body << std::endl; // pour debug
-//     }
-//     close(in_pipe[1]);
-
-//     std::string cgi_output;
-//     char buffer[4096];
-//     ssize_t n;
-//     while ((n = read(out_pipe[0], buffer, sizeof(buffer))) > 0) {
-//         cgi_output.append(buffer, n);
-//     }
-// 	std::cout << "CGI output received: " << cgi_output << std::endl; // pour debug
-//     close(out_pipe[0]);
-//     int status;
-//     waitpid(pid, &status, 0);
-
-//     // --- PARSING CGI OUTPUT ---
-//     std::string headers, body;
-//     size_t pos = cgi_output.find("\r\n\r\n");
-//     if (pos != std::string::npos) {
-//         headers = cgi_output.substr(0, pos);
-//         body = cgi_output.substr(pos + 4);
-//     } else {
-//         // fallback: tout dans le body
-//         body = cgi_output;
-//     }
-
-//     // Cherche le Content-Type dans les headers CGI
-//     std::string contentType = "text/html";
-//     std::istringstream hstream(headers);
-//     std::string line;
-//     while (std::getline(hstream, line)) {
-//         if (line.find("Content-Type:") == 0) {
-//             contentType = line.substr(13);
-//             // Nettoie les espaces et \r éventuels
-//             while (!contentType.empty() && (contentType[0] == ' ' || contentType[0] == '\t'))
-//                 contentType.erase(0, 1);
-//             if (!contentType.empty() && contentType[contentType.size()-1] == '\r')
-//                 contentType.erase(contentType.size()-1);
-//             break;
-//         }
-//     }
-
-//     // Génère une vraie réponse HTTP
-//     return buildHttpResponse("200 OK", contentType, body);
-// }
 
 std::string generatePhotoEntriesHtml(const std::string& photosDir) {
 	DIR* dir = opendir(photosDir.c_str());

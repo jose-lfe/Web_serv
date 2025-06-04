@@ -8,7 +8,7 @@ var_dump($_POST);
 echo "--- RAW INPUT ---\n";
 file_put_contents("/tmp/raw_input.txt", file_get_contents("php://input"));
 */
-/*
+
 // Ancien script d'upload
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['photo'])) {
     $uploads_dir = __DIR__ . '/photos';
@@ -27,8 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['photo'])) {
 } else {
     echo "Pas de fichier uploadé.";
 }
-*/
 
+/*
 // Nouveau script pour debug
 echo "<pre>";
 
@@ -79,5 +79,5 @@ foreach (getallheaders() as $name => $value) {
 }
 
 echo "</pre>";
-
+*/
 ?>

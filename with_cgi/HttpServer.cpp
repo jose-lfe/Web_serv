@@ -123,44 +123,119 @@ void HttpServer::run()
 
 void HttpServer::handleRead(int fd, int epoll_fd) {
     char buffer[4096];
-    ssize_t bytesRead = recv(fd, buffer, sizeof(buffer), 0);
+    ssize_t bytesRead;
+    bool gotData = false;
 
-    if (bytesRead <= 0) {
+    // Lire en boucle tant que recv > 0 (EPOLLET)
+    std::cout << "Lecture des données sur fd=" << fd << std::endl; // debug
+    while ((bytesRead = recv(fd, buffer, sizeof(buffer), 0)) > 0) {
+        _readBuffers[fd] += std::string(buffer, bytesRead);
+        std::cout << "Reçu " << bytesRead << " octets sur fd=" << fd << std::endl; // debug
+        gotData = true;
+    }
+    std::cout << "Buffer reçu (fd=" << fd << ") :\n" << _readBuffers[fd] << std::endl; // debug
+
+    if (!gotData && (bytesRead == 0 || (bytesRead < 0 && errno != EAGAIN && errno != EWOULDBLOCK))) {
         std::cerr << "Client closed connection or error on fd=" << fd << std::endl;
         closeClient(fd, epoll_fd);
         return;
     }
 
-    _readBuffers[fd] += std::string(buffer, bytesRead);
+    // Cherche la fin des headers
+    size_t headers_end = _readBuffers[fd].find("\r\n\r\n");
+    if (headers_end == std::string::npos)
+        return; // On n'a pas encore tous les headers
 
-    // Vérifie si on a reçu toute la requête (en-têtes terminés)
-    if (_readBuffers[fd].find("\r\n\r\n") != std::string::npos) {
-        std::cout << "Requête HTTP reçue depuis fd=" << fd << " :\n"
-                  << _readBuffers[fd] << std::endl;
-
-		HandleRequest req;
-		if (req.parse(_readBuffers[fd])) {
-			_parsedRequests[fd] = req;
-		}
-		else {
-			std::cerr << "Failed to parse HTTP request on fd=" << fd << std::endl;
-			closeClient(fd, epoll_fd);
-			return ;
-		}
-
-		req.print();
-        // ⚠️ À FAIRE : ici on ajoutera parseHeaders plus tard
-
-        // Passe en mode écriture
-        epoll_event ev;
-        ev.events = EPOLLOUT;
-        ev.data.fd = fd;
-        if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &ev) < 0) {
-            perror("epoll_ctl: mod to EPOLLOUT");
-            closeClient(fd, epoll_fd);
+    // Cherche Content-Length
+    size_t content_length = 0;
+    std::string headers = _readBuffers[fd].substr(0, headers_end);
+    std::istringstream hstream(headers);
+    std::string line;
+    while (std::getline(hstream, line)) {
+        if (line.find("Content-Length:") == 0) {
+            std::string value = line.substr(15);
+            value.erase(0, value.find_first_not_of(" \t"));
+            content_length = std::atoi(value.c_str());
+            break;
         }
     }
+
+    size_t total_needed = headers_end + 4 + content_length;
+    // Si Content-Length > 0, attendre tout le body
+    if (content_length > 0 && _readBuffers[fd].size() < total_needed)
+        return; // On n'a pas encore tout le body
+
+    // On a tout reçu : headers + body (ou juste headers pour GET)
+    std::string full_request = _readBuffers[fd].substr(0, total_needed);
+
+    std::cout << "Requête HTTP complète reçue depuis fd=" << fd << " :\n"
+              << full_request << std::endl;
+
+    HandleRequest req;
+    if (req.parse(full_request)) {
+        _parsedRequests[fd] = req;
+    } else {
+        std::cerr << "Failed to parse HTTP request on fd=" << fd << std::endl;
+        closeClient(fd, epoll_fd);
+        return;
+    }
+
+    req.print();
+
+    // Passe en mode écriture
+    epoll_event ev;
+    ev.events = EPOLLOUT | EPOLLET;
+    ev.data.fd = fd;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &ev) < 0) {
+        perror("epoll_ctl: mod to EPOLLOUT");
+        closeClient(fd, epoll_fd);
+    }
+
+    // Nettoie le buffer pour ce fd
+    _readBuffers.erase(fd);
 }
+
+
+// void HttpServer::handleRead(int fd, int epoll_fd) {
+//     char buffer[4096];
+//     ssize_t bytesRead = recv(fd, buffer, sizeof(buffer), 0);
+
+//     if (bytesRead <= 0) {
+//         std::cerr << "Client closed connection or error on fd=" << fd << std::endl;
+//         closeClient(fd, epoll_fd);
+//         return;
+//     }
+
+//     _readBuffers[fd] += std::string(buffer, bytesRead);
+
+//     // Vérifie si on a reçu toute la requête (en-têtes terminés)
+//     if (_readBuffers[fd].find("\r\n\r\n") != std::string::npos) {
+//         std::cout << "Requête HTTP reçue depuis fd=" << fd << " :\n"
+//                   << _readBuffers[fd] << std::endl;
+
+// 		HandleRequest req;
+// 		if (req.parse(_readBuffers[fd])) {
+// 			_parsedRequests[fd] = req;
+// 		}
+// 		else {
+// 			std::cerr << "Failed to parse HTTP request on fd=" << fd << std::endl;
+// 			closeClient(fd, epoll_fd);
+// 			return ;
+// 		}
+
+// 		req.print();
+//         // ⚠️ À FAIRE : ici on ajoutera parseHeaders plus tard
+
+//         // Passe en mode écriture
+//         epoll_event ev;
+//         ev.events = EPOLLOUT;
+//         ev.data.fd = fd;
+//         if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &ev) < 0) {
+//             perror("epoll_ctl: mod to EPOLLOUT");
+//             closeClient(fd, epoll_fd);
+//         }
+//     }
+// }
 
 void HttpServer::closeClient(int fd, int epoll_fd) {
     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
@@ -187,6 +262,11 @@ void HttpServer::acceptClient(int listen_fd, int epoll_fd) {
     }
 
     // Optionnel : rendre non-bloquant ici (tu peux ajouter ça plus tard)
+    if (!setNonBlocking(client_fd)) {
+    perror("fcntl client_fd O_NONBLOCK");
+    close(client_fd);
+    return;
+}
 
     epoll_event ev;
     ev.events = EPOLLIN | EPOLLET; // lecture, mode edge-triggered
