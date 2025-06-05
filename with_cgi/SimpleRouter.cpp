@@ -23,6 +23,31 @@ std::string trim(const std::string& s) {
     return s.substr(start, end - start + 1);
 }
 
+/*
+return buildHttpResponse("303 See Other", "text/plain", "Deleted. Redirecting...") + "Location: /photos\r\n\r\n";
+tente de renvoyer une réponse HTTP qui :
+
+Utilise le code 303 See Other (redirection après une action POST/DELETE).
+Ajoute un en-tête Location: /photos pour dire au navigateur de revenir à la galerie après suppression.
+Mais :
+Dans ta fonction buildHttpResponse, tu ajoutes déjà les headers principaux. Pour une vraie redirection, il 
+faut que l’en-tête Location soit inclus dans la partie headers, pas après le body.
+Il vaudrait mieux faire :
+
+std::string buildRedirectResponse(const std::string& location) {
+    std::string response = "HTTP/1.1 303 See Other\r\n";
+    response += "Location: " + location + "\r\n";
+    response += "Content-Length: 0\r\n";
+    response += "Connection: close\r\n\r\n";
+    return response;
+}
+// ...dans route()...
+if (suppression OK )
+{
+    return buildRedirectResponse("/photos");
+}*/
+//curl -X DELETE http://localhost:8080/photos/nom.jpg
+
 std::string buildHttpResponse(const std::string& status, const std::string& contentType, const std::string& body) {
 	std::string response;
 	response += "HTTP/1.1 " + status + "\r\n";
@@ -247,6 +272,20 @@ std::string SimpleRouter::route(const HandleRequest& req) {
 
 		return buildHttpResponse("200 OK", contentType, body);
 	}
+
+    if (method == "POST" && path.find("/photos/") == 0 && extractQueryString(path).find("_method=DELETE") != std::string::npos)
+    {
+        std::string filePath = "www" + path.substr(0, path.find('?')); // retire la query string
+        if (remove(filePath.c_str()) == 0)
+        {
+            return buildHttpResponse("303 See Other", "text/plain", "Deleted. Redirecting...")
+            + "Location: /photos\r\n\r\n";
+        }
+        else
+        {
+        return buildHttpResponse("500 Internal Server Error", "text/plain", "Failed to delete file.");
+        }
+    }
 
 	if (method == "POST" && endsWith(path, ".php")) // surement changer la logique en fonction des location mais pour l'instant c'est pour test
 	{
