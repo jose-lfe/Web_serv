@@ -6,7 +6,7 @@ int main(int argc, char **argv)
 {
 	try
 	{
-		std::vector<ServerConfig> configs = parseConfig("config/webserv.conf");
+		std::vector<ServerConfig> configs = parseConfig("config/confwithcgi.conf");
 		HttpServer server(configs);
 
 		if (!server.setupSockets())

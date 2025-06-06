@@ -7,6 +7,45 @@
 #include <vector>
 #include <sys/stat.h>
 
+void printServerConfig(const std::vector<ServerConfig>& configs) // debug function to print server configurations
+{
+    for (size_t i = 0; i < configs.size(); ++i) {
+        const ServerConfig& conf = configs[i];
+        std::cout << "=== Server " << i << " ===\n";
+        std::cout << "Host: " << conf.host << "\n";
+        std::cout << "Root: " << conf.root << "\n";
+        std::cout << "Index: " << conf.index << "\n";
+        std::cout << "Autoindex: " << (conf.autoindex ? "on" : "off") << "\n";
+        std::cout << "Ports: ";
+        for (size_t j = 0; j < conf.port.size(); ++j)
+            std::cout << conf.port[j] << (j + 1 < conf.port.size() ? ", " : "");
+        std::cout << "\nServer names: ";
+        for (size_t j = 0; j < conf.server_name.size(); ++j)
+            std::cout << conf.server_name[j] << (j + 1 < conf.server_name.size() ? ", " : "");
+        std::cout << "\nError pages: ";
+        for (std::map<int, std::string>::const_iterator it = conf.error_pages.begin(); it != conf.error_pages.end(); ++it)
+            std::cout << it->first << "=>" << it->second << " ";
+        std::cout << "\nClient max body size: " << conf.client_max_body_size << "\n";
+        std::cout << "Locations:\n";
+        for (size_t k = 0; k < conf.routes.size(); ++k) {
+            const Location& loc = conf.routes[k];
+            std::cout << "  - Path: " << loc.path << "\n";
+            std::cout << "    Root: " << loc.root << "\n";
+            std::cout << "    Index: " << loc.index << "\n";
+            std::cout << "    Autoindex: " << (loc.autoindex ? "on" : "off") << "\n";
+            std::cout << "    Upload enable: " << (loc.upload_enable ? "on" : "off") << "\n";
+            std::cout << "    Upload store: " << loc.upload_store << "\n";
+            std::cout << "    Redirection: " << loc.redirection << "\n";
+            std::cout << "    CGI extension: " << loc.cgi_extension << "\n";
+            std::cout << "    CGI path: " << loc.cgi_path << "\n";
+            std::cout << "    Methods: ";
+            for (size_t m = 0; m < loc.methods.size(); ++m)
+                std::cout << loc.methods[m] << (m + 1 < loc.methods.size() ? ", " : "");
+            std::cout << "\n";
+        }
+        std::cout << "====================\n";
+    }
+}
 
 std::string loadFile(const std::string& path) {
 	std::ifstream f(path.c_str());
@@ -232,9 +271,224 @@ std::string generatePhotoEntriesHtml(const std::string& photosDir) {
 	return html.str();
 }
 
-std::string SimpleRouter::route(const HandleRequest& req) {
+const ServerConfig* findMatchingConfig(const HandleRequest& req, const std::vector<ServerConfig>& configs) {
+    std::map<std::string, std::string>::const_iterator it = req.headers.find("Host");
+    if (it == req.headers.end())
+        return NULL;
+
+    for (size_t i = 0; i < configs.size(); ++i) {
+        for (size_t j = 0; j < configs[i].server_name.size(); ++j) {
+            if (it->second.find(configs[i].server_name[j]) != std::string::npos) {
+                for (size_t k = 0; k < configs[i].port.size(); ++k) {
+                    std::ostringstream portStr;
+                    portStr << ":" << configs[i].port[k];
+                    if (it->second.find(portStr.str()) != std::string::npos ||
+                        (it->second.find(":") == std::string::npos && configs[i].port[k] == 80)) {
+                        return &configs[i];
+                    }
+                }
+            }
+        }
+    }
+    return NULL;
+}
+
+const Location* findMatchingLocation(const HandleRequest& req, const ServerConfig* conf)
+{
+    const Location* bestLoc = NULL;
+    size_t bestLen = 0;
+    for (size_t i = 0; i < conf->routes.size(); ++i) {
+        const Location& loc = conf->routes[i];
+        if (req.path.find(loc.path) == 0 && loc.path.length() > bestLen) {
+            bestLoc = &loc;
+            bestLen = loc.path.length();
+        }
+    }
+
+    // Si aucune location ne matche, cherche la location "/"
+    if (!bestLoc) {
+        for (size_t i = 0; i < conf->routes.size(); ++i) {
+            if (conf->routes[i].path == "/") {
+                bestLoc = &conf->routes[i];
+                break;
+            }
+        }
+    }
+
+    if (!bestLoc)
+        return NULL;
+    
+    return bestLoc;
+}
+
+bool isMethodAllowed(const Location* loc, const std::vector<std::string>& methods, const std::string& method)
+{
+    if (methods.empty())
+    {
+        return true;
+    }
+    for (int i = 0; i < loc->methods.size(); ++i)
+    {
+        if (loc->methods[i] == method)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string getMimeType(const std::string& path) {
+    std::map<std::string, std::string> mimeTypes;
+
+    // Initialisation des types MIME connus
+    mimeTypes[".html"] = "text/html";
+    mimeTypes[".htm"] = "text/html";
+    mimeTypes[".css"] = "text/css";
+    mimeTypes[".js"] = "application/javascript";
+    mimeTypes[".json"] = "application/json";
+    mimeTypes[".png"] = "image/png";
+    mimeTypes[".jpg"] = "image/jpeg";
+    mimeTypes[".jpeg"] = "image/jpeg";
+    mimeTypes[".gif"] = "image/gif";
+    mimeTypes[".txt"] = "text/plain";
+    mimeTypes[".pdf"] = "application/pdf";
+    mimeTypes[".ico"] = "image/x-icon";
+    mimeTypes[".svg"] = "image/svg+xml";
+
+    // Trouver la dernière extension
+    std::size_t dotPos = path.rfind('.');
+    if (dotPos == std::string::npos)
+        return "application/octet-stream"; // Par défaut si pas d'extension
+
+    std::string ext = path.substr(dotPos);
+    std::map<std::string, std::string>::const_iterator it = mimeTypes.find(ext);
+    if (it != mimeTypes.end())
+        return it->second;
+
+    return "application/octet-stream"; // Type par défaut
+}
+
+std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>& _configs)
+{
+    const ServerConfig* conf = findMatchingConfig(req, _configs);
+    if (!conf) {
+       return buildHttpResponse("500 Internal Server Error", "text/plain", "No matching server configuration");
+    }
+    const Location* loc = findMatchingLocation(req, conf);
+    if (!loc) {
+        return buildHttpResponse("404 Not Found", "text/plain", "404 Page Not Found");
+    }
+    // Vérifie la redirection ici
+    if (!loc->redirection.empty()) {
+        // 302 Found ou 301 Moved Permanently selon ton besoin
+        std::string response = "HTTP/1.1 302 Found\r\n";
+        response += "Location: " + loc->redirection + "\r\n";
+        response += "Content-Length: 0\r\n";
+        response += "Connection: close\r\n\r\n";
+        return response;
+    }
+    if (!isMethodAllowed(loc, loc->methods, "GET")) {
+        return buildHttpResponse("405 Method Not Allowed", "text/plain", "405 Method Not Allowed");
+    }
+    // 1. Déterminer le root à utiliser
+    std::string baseRoot;
+    baseRoot = loc->root;
+    // 2. Construire le chemin relatif à partir du path de la requête et du chemin de la location
+    std::string relPath = req.path;
+    if (relPath.find(loc->path) == 0)
+        relPath = relPath.substr(loc->path.length());
+    if (!relPath.empty() && relPath[0] == '/')
+        relPath = relPath.substr(1);
+
+    // 3. Construire le chemin réel
+    std::string filePath = baseRoot;
+    if (!filePath.empty() && filePath[filePath.size() - 1] != '/')
+        filePath += "/";
+    filePath += relPath;
+    std::cout << "GET filePath: " << filePath << std::endl; // pour debug
+
+    // 4. Lire le fichier
+    struct stat st;
+    if (stat(filePath.c_str(), &st) != 0) {
+        return buildHttpResponse("404 Not Found", "text/plain", "404 Page Not Found");
+    }
+    if (S_ISREG(st.st_mode))
+    {
+        std::cout << "Is a file: " << filePath << std::endl; // pour debug
+
+        // Vérifie les droits d'accès en lecture
+        if (access(filePath.c_str(), R_OK) != 0) {
+            return buildHttpResponse("403 Forbidden", "text/plain", "Permission denied");
+        }
+
+        // Détermine le type MIME
+        std::string contentType = getMimeType(filePath);
+
+        // Lit le fichier
+        std::ifstream file(filePath.c_str(), std::ios::binary);
+        if (!file.is_open()) {
+            return buildHttpResponse("500 Internal Server Error", "text/plain", "Failed to open file");
+        }
+        std::ostringstream ss;
+        ss << file.rdbuf();
+        std::string body = ss.str();
+
+        return buildHttpResponse("200 OK", contentType, body);
+    }
+    else if (S_ISDIR(st.st_mode))
+    {
+        std::cout << "Is a directory: " << filePath << std::endl; //pour debug
+        if (!loc->index.empty())
+        {
+            // Si c'est un répertoire, on cherche le fichier index
+            std::string indexPath = filePath;
+            if (indexPath.back() != '/')
+                indexPath += "/";
+            indexPath += loc->index;
+
+            std::ifstream f(indexPath.c_str());
+            if (!f) {
+                return buildHttpResponse("404 Not Found", "text/plain", "404 Page Not Found");
+            }
+            std::ostringstream s;
+            s << f.rdbuf();
+            std::string body = s.str();
+            return buildHttpResponse("200 OK", getMimeType(indexPath), body);
+        }
+        else if (loc->autoindex)
+        {
+            DIR* dir = opendir(filePath.c_str());
+            if (!dir) {
+                return buildHttpResponse("403 Forbidden", "text/plain", "Cannot open directory");
+            }
+            std::ostringstream html;
+            html << "<html><head><title>Index of " << req.path << "</title></head><body>";
+            html << "<h1>Index of " << req.path << "</h1><ul>";
+
+            struct dirent* entry;
+            while ((entry = readdir(dir)) != NULL) {
+                std::string name = entry->d_name;
+                if (name == ".") continue;
+                html << "<li><a href=\"" << req.path;
+                if (req.path[req.path.size()-1] != '/')
+                    html << "/";
+                html << name << "\">" << name << "</a></li>";
+            }
+            closedir(dir);
+
+            html << "</ul></body></html>";
+            return buildHttpResponse("200 OK", "text/html", html.str());
+        }
+    }
+    return buildHttpResponse("403 Forbidden", "text/plain", "403 Forbidden");
+}
+
+std::string SimpleRouter::route(const HandleRequest& req, const std::vector<ServerConfig>& _configs) {
 	std::string method = req.method;
 	std::string path = req.path;
+
+    printServerConfig(_configs); // pour debug
+
 	// Route pour la page d'accueil (album)
 	if (method == "GET" && (path == "/" || path == "/photos")) {
 		std::string templateHtml = loadFile("www/template/gallery.html");

@@ -8,6 +8,7 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 #include <stdexcept>
+#include <set>
 
 HttpServer::HttpServer(const std::vector<ServerConfig> &configs) : _configs(configs), _epoll_fd(-1) {}
 
@@ -15,29 +16,55 @@ HttpServer::~HttpServer() {}
 
 bool HttpServer::setupSockets()
 {
-	std::map<int, bool> openedPorts;
+    std::set<std::pair<std::string, int> > opened;
 
-	for (size_t i = 0; i < _configs.size(); ++i)
-	{
+    for (size_t i = 0; i < _configs.size(); ++i)
+    {
         const ServerConfig &conf = _configs[i];
 
-	
-		for (size_t j = 0; j < conf.port.size(); ++j) {
-			int port = conf.port[j];
+        for (size_t j = 0; j < conf.port.size(); ++j) {
+            int port = conf.port[j];
+            std::pair<std::string, int> key = std::make_pair(conf.host, port);
 
-			if (openedPorts[port])
-				continue;
+            if (opened.count(key))
+                continue;
 
-			Socket sock(conf.host, port, _configs);;
-			if (!sock.bindAndListen())
-				return false;
+            Socket sock(conf.host, port, _configs);
+            if (!sock.bindAndListen())
+                return false;
 
-			_listenSockets.push_back(std::move(sock));
-    	    openedPorts[port] = true;
-		}
-	}
-	return true;
+            _listenSockets.push_back(std::move(sock));
+            opened.insert(key);
+        }
+    }
+    return true;
 }
+
+// bool HttpServer::setupSockets()
+// {
+// 	std::map<int, bool> openedPorts;
+
+// 	for (size_t i = 0; i < _configs.size(); ++i)
+// 	{
+//         const ServerConfig &conf = _configs[i];
+
+	
+// 		for (size_t j = 0; j < conf.port.size(); ++j) {
+// 			int port = conf.port[j];
+
+// 			if (openedPorts[port])
+// 				continue;
+
+// 			Socket sock(conf.host, port, _configs);;
+// 			if (!sock.bindAndListen())
+// 				return false;
+
+// 			_listenSockets.push_back(std::move(sock));
+//     	    openedPorts[port] = true;
+// 		}
+// 	}
+// 	return true;
+// }
 
 #include <fcntl.h>
 
@@ -290,7 +317,7 @@ void HttpServer::handleWrite(int fd, int epoll_fd) {
 	}
 
 	const HandleRequest& req = it->second;
-	std::string response = SimpleRouter::route(req);
+	std::string response = SimpleRouter::route(req, _configs);
 
 	size_t totalSent = 0;
 	size_t toSend = response.size();

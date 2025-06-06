@@ -12,10 +12,11 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <cstring>
+#include "Struct.hpp"
 
 class SimpleRouter {
 public:
-	static std::string route(const HandleRequest& req);
+	static std::string route(const HandleRequest& req, const std::vector<ServerConfig>& _configs);
 	//static std::string route(const std::string& method, const std::string& path);
 };
 
