@@ -59,5 +59,4 @@ ServerConfig::ServerConfig() :
         root("./"),
         port(80),
         server_name({"localhost"}),
-        error_pages({{404, "/error/404.html"}}),
         client_max_body_size(1000000) {}

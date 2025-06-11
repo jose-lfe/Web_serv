@@ -41,10 +41,104 @@ void printServerConfig(const std::vector<ServerConfig>& configs) // debug functi
             std::cout << "    Methods: ";
             for (size_t m = 0; m < loc.methods.size(); ++m)
                 std::cout << loc.methods[m] << (m + 1 < loc.methods.size() ? ", " : "");
-            std::cout << "\n";
+                std::cout << "\n";
+            }
+            std::cout << "====================\n";
         }
-        std::cout << "====================\n";
     }
+
+    std::string buildHttpResponse(const std::string& status, const std::string& contentType, const std::string& body)
+    {
+        std::string response;
+        response += "HTTP/1.1 " + status + "\r\n";
+        response += "Content-Type: " + contentType + "\r\n";
+        response += "Content-Length: " + to_string(body.size()) + "\r\n";
+        response += "Connection: close\r\n";
+        response += "\r\n";
+        response += body;
+        return response;
+    }
+
+    std::string buildErrorResponse(int error, std::map<int, std::string> error_pages)
+    {
+        std::string response;
+        std::string filePath;
+        std::string status;
+        std::string body;
+    if (error_pages.find(error) != error_pages.end())
+    {
+        filePath = error_pages.find(error)->second;
+    }
+    else
+    {
+    switch (error)
+    {
+        case 400:
+            filePath = "./error_pages/error_400.html";
+            break;
+
+        case 403:
+            filePath = "./error_pages/error_403.html";
+            break;
+        case 404: 
+            filePath = "./error_pages/error_404.html";
+            break;
+        case 405:
+            filePath = "./error_pages/error_405.html";
+            break;
+        case 500:
+            filePath = "./error_pages/error_500.html";
+            break;
+        case 505:
+            filePath = "./error_pages/error_505.html";
+            break;
+        default:
+            filePath = "./errors/default.html";  // fallback file
+    }   
+    }
+
+        switch (error) {
+        case 400:
+            status = "400 Bad Request";
+            break;
+
+        case 403:
+            status = "403 Forbidden";
+            break;
+        case 404: 
+            status = "404 Not Found";
+            break;
+        case 405:
+            status = "Method Not Allowed";
+            break;
+        case 500:
+            status = "Internal Server Error";
+            break;
+        case 505:
+            status = "HTTP Version Not Supported";
+            break;
+        default:
+            status = "Error";
+        }
+        
+
+    std::ifstream file(filePath.c_str(), std::ios::binary);
+    if (!file.is_open()) {
+        std::cout << filePath << std::endl;
+        return buildHttpResponse("404 Not Found", "text/html", "404 Page Not Found");
+    }
+    std::ostringstream ss;
+    ss << file.rdbuf();
+    body = ss.str();
+
+	response += "HTTP/1.1 " + status + "\r\n";
+	response += "Content-Type: text/html\r\n";
+	response += "Content-Length: " + to_string(body.size()) + "\r\n";
+	response += "Connection: close\r\n";
+	response += "\r\n";
+	response += body;
+
+	return response;
 }
 
 std::string loadFile(const std::string& path) {
@@ -87,16 +181,6 @@ if (suppression OK )
 }*/
 //curl -X DELETE http://localhost:8080/photos/nom.jpg
 
-std::string buildHttpResponse(const std::string& status, const std::string& contentType, const std::string& body) {
-	std::string response;
-	response += "HTTP/1.1 " + status + "\r\n";
-	response += "Content-Type: " + contentType + "\r\n";
-	response += "Content-Length: " + to_string(body.size()) + "\r\n";
-	response += "Connection: close\r\n";
-	response += "\r\n";
-	response += body;
-	return response;
-}
 
 std::string extractQueryString(const std::string& url)
 {
@@ -432,7 +516,7 @@ std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>&
     // 4. Lire le fichier
     struct stat st;
     if (stat(filePath.c_str(), &st) != 0) {
-        return buildHttpResponse("404 Not Found", "text/plain", "404 Page Not Found");
+        return buildErrorResponse(404, conf->error_pages);
     }
     if (S_ISREG(st.st_mode))
     {
@@ -472,7 +556,7 @@ std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>&
 
             std::ifstream f(indexPath.c_str());
             if (!f) {
-                return buildHttpResponse("404 Not Found", "text/plain", "404 Page Not Found");
+                return buildErrorResponse(404, conf->error_pages);
             }
             std::ostringstream s;
             s << f.rdbuf();
@@ -514,7 +598,7 @@ std::string SimpleRouter::route(const HandleRequest& req, const std::vector<Serv
     printServerConfig(_configs); // pour debug
 
     if (req.http_version != "HTTP/1.1")
-        return buildHttpResponse("505 Bad HTTP version", "text/plain", "Bad HTTP version.");
+        return buildErrorResponse(505, _configs[0].error_pages);
 	// Route pour la page d'accueil (album)
     if (method == "GET")
         return HandleGET(req, _configs);
