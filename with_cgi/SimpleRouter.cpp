@@ -276,14 +276,19 @@ const ServerConfig* findMatchingConfig(const HandleRequest& req, const std::vect
     if (it == req.headers.end())
         return NULL;
 
-    for (size_t i = 0; i < configs.size(); ++i) {
-        for (size_t j = 0; j < configs[i].server_name.size(); ++j) {
-            if (it->second.find(configs[i].server_name[j]) != std::string::npos) {
-                for (size_t k = 0; k < configs[i].port.size(); ++k) {
+    for (size_t i = 0; i < configs.size(); ++i)
+    {
+        for (size_t j = 0; j < configs[i].server_name.size(); ++j)
+        {
+            if (it->second.find(configs[i].server_name[j]) != std::string::npos)
+            {
+                for (size_t k = 0; k < configs[i].port.size(); ++k)
+                {
                     std::ostringstream portStr;
                     portStr << ":" << configs[i].port[k];
                     if (it->second.find(portStr.str()) != std::string::npos ||
-                        (it->second.find(":") == std::string::npos && configs[i].port[k] == 80)) {
+                        (it->second.find(":") == std::string::npos && configs[i].port[k] == 80))
+                    {
                         return &configs[i];
                     }
                 }
@@ -293,24 +298,39 @@ const ServerConfig* findMatchingConfig(const HandleRequest& req, const std::vect
     return NULL;
 }
 
-const Location* findMatchingLocation(const HandleRequest& req, const ServerConfig* conf)
+const Location* findMatchingLocation(const HandleRequest& req, const std::vector<ServerConfig>& _configs, const ServerConfig** conf)
 {
     const Location* bestLoc = NULL;
+    const ServerConfig* tmp_conf = NULL;
     size_t bestLen = 0;
-    for (size_t i = 0; i < conf->routes.size(); ++i) {
-        const Location& loc = conf->routes[i];
-        if (req.path.find(loc.path) == 0 && loc.path.length() > bestLen) {
-            bestLoc = &loc;
-            bestLen = loc.path.length();
+    for (int i = 0; i < _configs.size(); i++)
+    {
+        tmp_conf = &_configs[i];
+        for (size_t i = 0; i < tmp_conf->routes.size(); ++i)
+        {
+            const Location& loc = tmp_conf->routes[i];
+            if (req.path.find(loc.path) == 0 && loc.path.length() > bestLen)
+            {
+                bestLoc = &loc;
+                bestLen = loc.path.length();
+                *conf = tmp_conf;
+            }
         }
     }
 
     // Si aucune location ne matche, cherche la location "/"
-    if (!bestLoc) {
-        for (size_t i = 0; i < conf->routes.size(); ++i) {
-            if (conf->routes[i].path == "/") {
-                bestLoc = &conf->routes[i];
-                break;
+    if (!bestLoc) 
+    {
+        for (int i = 0; i < _configs.size(); i++)
+        {
+            tmp_conf = &_configs[i];
+            for (size_t i = 0; i < tmp_conf->routes.size(); ++i)
+            {
+                if (tmp_conf->routes[i].path == "/") 
+                {
+                    *conf = tmp_conf;
+                    return &tmp_conf->routes[i];
+                }
             }
         }
     }
@@ -370,11 +390,12 @@ std::string getMimeType(const std::string& path) {
 
 std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>& _configs)
 {
-    const ServerConfig* conf = findMatchingConfig(req, _configs);
-    if (!conf) {
-       return buildHttpResponse("500 Internal Server Error", "text/plain", "No matching server configuration");
-    }
-    const Location* loc = findMatchingLocation(req, conf);
+//     const ServerConfig* conf = findMatchingConfig(req, _configs);
+//     if (!conf) {
+//        return buildHttpResponse("500 Internal Server Error", "text/plain", "No matching server configuration");
+//     }
+    const ServerConfig* conf;
+    const Location* loc = findMatchingLocation(req, _configs, &conf);
     if (!loc) {
         return buildHttpResponse("404 Not Found", "text/plain", "404 Page Not Found");
     }
@@ -399,6 +420,7 @@ std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>&
         relPath = relPath.substr(loc->path.length());
     if (!relPath.empty() && relPath[0] == '/')
         relPath = relPath.substr(1);
+    std::cout << std::endl << relPath << std::endl << std::endl;
 
     // 3. Construire le chemin réel
     std::string filePath = baseRoot;
@@ -445,6 +467,8 @@ std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>&
             if (indexPath.back() != '/')
                 indexPath += "/";
             indexPath += loc->index;
+            std::cout << "Index path: " << indexPath << std::endl; //pour debug
+
 
             std::ifstream f(indexPath.c_str());
             if (!f) {
@@ -489,7 +513,11 @@ std::string SimpleRouter::route(const HandleRequest& req, const std::vector<Serv
 
     printServerConfig(_configs); // pour debug
 
+    if (req.http_version != "HTTP/1.1")
+        return buildHttpResponse("505 Bad HTTP version", "text/plain", "Bad HTTP version.");
 	// Route pour la page d'accueil (album)
+    if (method == "GET")
+        return HandleGET(req, _configs);
 	if (method == "GET" && (path == "/" || path == "/photos")) {
 		std::string templateHtml = loadFile("www/template/gallery.html");
 		if (templateHtml.empty()) {

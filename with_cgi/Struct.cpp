@@ -24,7 +24,7 @@
 Location::Location() :
     path(""),
     root(""),
-    index("/index.html"),
+    index(""),
     autoindex(false),
     upload_enable(false),
     upload_store(""),

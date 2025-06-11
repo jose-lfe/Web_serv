@@ -148,7 +148,7 @@ std::vector<ServerConfig> parseConfig(const std::string& path) {
         if (tokens[0] == "server" && tokens.size() == 2 && tokens[1] == "{") {
             current = ServerConfig();
             // Ajout : initialiser index et autoindex à des valeurs par défaut
-            current.index = "/index.html";
+            current.index = "";
             current.autoindex = false;
             in_server = true;
         }
