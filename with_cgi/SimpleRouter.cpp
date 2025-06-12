@@ -54,6 +54,7 @@ void printServerConfig(const std::vector<ServerConfig>& configs) // debug functi
         response += "Content-Type: " + contentType + "\r\n";
         response += "Content-Length: " + to_string(body.size()) + "\r\n";
         response += "Connection: close\r\n";
+        response += "Server: webserv/1.0\r\n";
         response += "\r\n";
         response += body;
         return response;
@@ -135,6 +136,7 @@ void printServerConfig(const std::vector<ServerConfig>& configs) // debug functi
 	response += "Content-Type: text/html\r\n";
 	response += "Content-Length: " + to_string(body.size()) + "\r\n";
 	response += "Connection: close\r\n";
+    response += "Server: webserv/1.0\r\n";
 	response += "\r\n";
 	response += body;
 
@@ -206,6 +208,7 @@ std::vector<std::string> buildCgiEnv(const HandleRequest& req, const std::string
 
     env.push_back("REQUEST_METHOD=" + req.method);
     env.push_back("SCRIPT_FILENAME=" + scriptPath);
+    env.push_back("PATH_INFO=" + req.path);
     env.push_back("SCRIPT_NAME=" + req.path); // ok tres certainement / ou pas peut etre faire l'inverse de la ligne du bas
     env.push_back("QUERY_STRING=" + extractQueryString(req.path)); // à parser depuis l'URL si besoin
     env.push_back("CONTENT_TYPE=" + trim(getHeaderValue(req.headers, "Content-Type")));
@@ -241,7 +244,7 @@ bool endsWith(const std::string& str, const std::string& suffix) {
 	return str.compare(str.length() - suffix.length(), suffix.length(), suffix) == 0;
 }
 
-std::string exec_cgi(const HandleRequest& req)
+std::string exec_cgi(const HandleRequest& req, const std::vector<ServerConfig>& configs)
 {
     std::string scriptPath = "/home/jose-lfe/projects/web/with_cgi/www" + req.path;
     std::string interpreter = "/usr/bin/php-cgi";
@@ -265,7 +268,7 @@ std::string exec_cgi(const HandleRequest& req)
     pid_t pid = fork();
     if (pid < 0) {
         perror("fork");
-        return buildHttpResponse("500 Internal Server Error", "text/plain", "Fork error");
+        return buildErrorResponse(500, configs[0].error_pages);
     }
 
     if (pid == 0) {
@@ -382,12 +385,61 @@ const ServerConfig* findMatchingConfig(const HandleRequest& req, const std::vect
     return NULL;
 }
 
+const Location* findMatchingLocationWithName(const HandleRequest &req, const ServerConfig* conf)
+{
+    std::cout << "trouver le serveur_name" << std::endl;
+    const Location* bestLoc = NULL;
+    size_t bestLen = 0;
+    for (size_t i = 0; i < conf->routes.size(); ++i)
+    {
+        const Location& loc = conf->routes[i];
+        if (req.path.find(loc.path) == 0 && loc.path.length() > bestLen)
+        {
+            bestLoc = &loc;
+            bestLen = loc.path.length();
+        }
+    }
+    if (!bestLoc)
+    {
+        for (size_t i = 0; i < conf->routes.size(); ++i)
+        {
+            if (conf->routes[i].path == "/") 
+            {
+                return &conf->routes[i];
+            }
+        }
+    }
+    if (!bestLoc)
+        return NULL;
+    return bestLoc;
+}
+
 const Location* findMatchingLocation(const HandleRequest& req, const std::vector<ServerConfig>& _configs, const ServerConfig** conf)
 {
     const Location* bestLoc = NULL;
     const ServerConfig* tmp_conf = NULL;
     size_t bestLen = 0;
-    for (int i = 0; i < _configs.size(); i++)
+
+    for (size_t i = 0; i < _configs.size(); i++)
+    {
+        tmp_conf = &_configs[i];
+        if (!tmp_conf->server_name.empty())
+        {
+            std::cout << "server config numero " << i << ", a une instruction server_name." << std::endl; //debug
+            for (size_t j = 0; j < tmp_conf->server_name.size(); j++)
+            {
+                std::cout << req.headers.at("Host") << std::endl; // debug
+                std::cout << tmp_conf->server_name[j] << std::endl; // debug
+                if (req.headers.count("Host") && req.headers.at("Host") == tmp_conf->server_name[j])
+                {
+                    *conf = tmp_conf;
+                    return findMatchingLocationWithName(req, tmp_conf);
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < _configs.size(); i++)
     {
         tmp_conf = &_configs[i];
         for (size_t i = 0; i < tmp_conf->routes.size(); ++i)
@@ -405,15 +457,15 @@ const Location* findMatchingLocation(const HandleRequest& req, const std::vector
     // Si aucune location ne matche, cherche la location "/"
     if (!bestLoc) 
     {
-        for (int i = 0; i < _configs.size(); i++)
+        for (size_t i = 0; i < _configs.size(); i++)
         {
             tmp_conf = &_configs[i];
-            for (size_t i = 0; i < tmp_conf->routes.size(); ++i)
+            for (size_t j = 0; j < tmp_conf->routes.size(); ++j)
             {
-                if (tmp_conf->routes[i].path == "/") 
+                if (tmp_conf->routes[j].path == "/") 
                 {
                     *conf = tmp_conf;
-                    return &tmp_conf->routes[i];
+                    return &tmp_conf->routes[j];
                 }
             }
         }
@@ -474,14 +526,10 @@ std::string getMimeType(const std::string& path) {
 
 std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>& _configs)
 {
-//     const ServerConfig* conf = findMatchingConfig(req, _configs);
-//     if (!conf) {
-//        return buildHttpResponse("500 Internal Server Error", "text/plain", "No matching server configuration");
-//     }
     const ServerConfig* conf;
     const Location* loc = findMatchingLocation(req, _configs, &conf);
     if (!loc) {
-        return buildHttpResponse("404 Not Found", "text/plain", "404 Page Not Found");
+        return buildErrorResponse(404, _configs[0].error_pages);
     }
     // Vérifie la redirection ici
     if (!loc->redirection.empty()) {
@@ -493,7 +541,7 @@ std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>&
         return response;
     }
     if (!isMethodAllowed(loc, loc->methods, "GET")) {
-        return buildHttpResponse("405 Method Not Allowed", "text/plain", "405 Method Not Allowed");
+        return buildErrorResponse(405, conf->error_pages);
     }
     // 1. Déterminer le root à utiliser
     std::string baseRoot;
@@ -524,7 +572,7 @@ std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>&
 
         // Vérifie les droits d'accès en lecture
         if (access(filePath.c_str(), R_OK) != 0) {
-            return buildHttpResponse("403 Forbidden", "text/plain", "Permission denied");
+            return buildErrorResponse(403, conf->error_pages);
         }
 
         // Détermine le type MIME
@@ -533,7 +581,7 @@ std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>&
         // Lit le fichier
         std::ifstream file(filePath.c_str(), std::ios::binary);
         if (!file.is_open()) {
-            return buildHttpResponse("500 Internal Server Error", "text/plain", "Failed to open file");
+            return buildErrorResponse(500, conf->error_pages);
         }
         std::ostringstream ss;
         ss << file.rdbuf();
@@ -567,7 +615,7 @@ std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>&
         {
             DIR* dir = opendir(filePath.c_str());
             if (!dir) {
-                return buildHttpResponse("403 Forbidden", "text/plain", "Cannot open directory");
+                return buildErrorResponse(403, conf->error_pages);
             }
             std::ostringstream html;
             html << "<html><head><title>Index of " << req.path << "</title></head><body>";
@@ -588,7 +636,16 @@ std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>&
             return buildHttpResponse("200 OK", "text/html", html.str());
         }
     }
-    return buildHttpResponse("403 Forbidden", "text/plain", "403 Forbidden");
+    return buildErrorResponse(403, conf->error_pages);
+}
+
+std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>& _configs)
+{
+    /*
+    le but:
+    consigne hyper large alors on vas decider que si on recois Post avec exec -> upload
+    sinon ca deviendra une sorte de echo
+    */
 }
 
 std::string SimpleRouter::route(const HandleRequest& req, const std::vector<ServerConfig>& _configs) {
@@ -599,9 +656,9 @@ std::string SimpleRouter::route(const HandleRequest& req, const std::vector<Serv
 
     if (req.http_version != "HTTP/1.1")
         return buildErrorResponse(505, _configs[0].error_pages);
-	// Route pour la page d'accueil (album)
-    if (method == "GET")
+        if (method == "GET")
         return HandleGET(req, _configs);
+        //Route pour la page d'accueil (album)
 	if (method == "GET" && (path == "/" || path == "/photos")) {
 		std::string templateHtml = loadFile("www/template/gallery.html");
 		if (templateHtml.empty()) {
@@ -655,7 +712,7 @@ std::string SimpleRouter::route(const HandleRequest& req, const std::vector<Serv
 
 	if (method == "POST" && endsWith(path, ".php")) // surement changer la logique en fonction des location mais pour l'instant c'est pour test
 	{
-		return exec_cgi(req);
+		return exec_cgi(req, _configs);
 		//return buildHttpResponse("200 OK", "text/plain", "PHP script executed successfully.");
 	}
 
