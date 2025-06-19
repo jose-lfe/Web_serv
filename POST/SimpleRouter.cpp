@@ -237,7 +237,8 @@ std::vector<std::string> buildCgiEnv(const HandleRequest& req, const std::string
     env.push_back("SCRIPT_NAME=" + req.path); // ok tres certainement / ou pas peut etre faire l'inverse de la ligne du bas
     env.push_back("QUERY_STRING=" + extractQueryString(req.path)); // à parser depuis l'URL si besoin
     env.push_back("CONTENT_TYPE=" + trim(getHeaderValue(req.headers, "Content-Type")));
-    env.push_back("CONTENT_LENGTH=" + trim(getHeaderValue(req.headers, "Content-Length")));
+    env.push_back("CONTENT_LENGTH=" + to_string(req.body.size()));
+    //env.push_back("CONTENT_LENGTH=" + trim(getHeaderValue(req.headers, "Content-Length")));
     env.push_back("SERVER_PROTOCOL=HTTP/1.1");
     env.push_back("GATEWAY_INTERFACE=CGI/1.1");
     env.push_back("SERVER_SOFTWARE=webserv");
@@ -318,10 +319,18 @@ std::string exec_cgi(const HandleRequest& req, const ServerConfig& configs, cons
     close(out_pipe[1]);
 
     // Envoie le body POST au CGI
-    if (!req.body.empty()) {
-        ssize_t written = write(in_pipe[1], req.body.c_str(), req.body.size());
-        if (written < 0) perror("write to CGI stdin");
+if (!req.body.empty()) {
+    size_t total_written = 0;
+    while (total_written < req.body.size()) {
+        ssize_t written = write(in_pipe[1], req.body.c_str() + total_written, req.body.size() - total_written);
+        if (written < 0) {
+            perror("write to CGI stdin");
+            break;
+        }
+        total_written += written;
     }
+    std::cerr << "Total written to CGI stdin: " << total_written << " bytes" << std::endl;
+}
     std::cerr << "Body size: " << req.body.size() << " / Content-Length: " << getHeaderValue(req.headers, "Content-Length") << std::endl; // pour debug
     close(in_pipe[1]);
 
@@ -344,7 +353,7 @@ std::string exec_cgi(const HandleRequest& req, const ServerConfig& configs, cons
     } else {
         body = newbody;
     }
-
+    std::cerr << "newbody size: " << newbody.size() << " body size: " << body.size() << std::endl;
     std::string contentType = "text/html";
     std::istringstream hstream(headers);
     std::string line;
