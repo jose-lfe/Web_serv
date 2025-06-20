@@ -47,18 +47,27 @@ void printServerConfig(const std::vector<ServerConfig>& configs) // debug functi
         }
     }
 
-    std::string buildHttpResponse(const std::string& status, const std::string& contentType, const std::string& body)
-    {
-        std::string response;
-        response += "HTTP/1.1 " + status + "\r\n";
-        response += "Content-Type: " + contentType + "\r\n";
-        response += "Content-Length: " + to_string(body.size()) + "\r\n";
-        response += "Connection: close\r\n";
-        response += "Server: webserv/1.0\r\n";
-        response += "\r\n";
-        response += body;
-        return response;
-    }
+std::string buildRedirectionResponse(const Location& loc)
+{
+    std::string response = "HTTP/1.1 303 See Other\r\n";
+    response += "Location: " + loc.redirection + "\r\n";
+    response += "Content-Length: 0\r\n";
+    response += "Connection: close\r\n\r\n";
+    return response;
+}
+    
+std::string buildHttpResponse(const std::string& status, const std::string& contentType, const std::string& body)
+{
+    std::string response;
+    response += "HTTP/1.1 " + status + "\r\n";
+    response += "Content-Type: " + contentType + "\r\n";
+    response += "Content-Length: " + to_string(body.size()) + "\r\n";
+    response += "Connection: close\r\n";
+    response += "Server: webserv/1.0\r\n";
+    response += "\r\n";
+    response += body;
+    return response;
+}
 
 std::string buildHtmlEchoResponse(const HandleRequest& req)
 {
@@ -84,87 +93,87 @@ std::string buildHtmlEchoResponse(const HandleRequest& req)
 	return response;
 }
 
-    std::string buildErrorResponse(int error, std::map<int, std::string> error_pages)
-    {
-        std::string response;
-        std::string filePath;
-        std::string status;
-        std::string body;
-    if (error_pages.find(error) != error_pages.end())
-    {
-        filePath = error_pages.find(error)->second;
+std::string buildErrorResponse(int error, std::map<int, std::string> error_pages)
+{
+    std::string response;
+    std::string filePath;
+    std::string status;
+    std::string body;
+if (error_pages.find(error) != error_pages.end())
+{
+    filePath = error_pages.find(error)->second;
+}
+else
+{
+switch (error)
+{
+    case 400:
+        filePath = "./error_pages/error_400.html";
+        break;
+
+    case 403:
+        filePath = "./error_pages/error_403.html";
+        break;
+    case 404: 
+        filePath = "./error_pages/error_404.html";
+        break;
+    case 405:
+        filePath = "./error_pages/error_405.html";
+        break;
+    case 500:
+        filePath = "./error_pages/error_500.html";
+        break;
+    case 505:
+        filePath = "./error_pages/error_505.html";
+        break;
+    default:
+        filePath = "./errors/default.html";  // fallback file
+}   
+}
+
+    switch (error) {
+    case 400:
+        status = "400 Bad Request";
+        break;
+
+    case 403:
+        status = "403 Forbidden";
+        break;
+    case 404: 
+        status = "404 Not Found";
+        break;
+    case 405:
+        status = "Method Not Allowed";
+        break;
+    case 500:
+        status = "Internal Server Error";
+        break;
+    case 505:
+        status = "HTTP Version Not Supported";
+        break;
+    default:
+        status = "Error";
     }
-    else
-    {
-    switch (error)
-    {
-        case 400:
-            filePath = "./error_pages/error_400.html";
-            break;
+    
 
-        case 403:
-            filePath = "./error_pages/error_403.html";
-            break;
-        case 404: 
-            filePath = "./error_pages/error_404.html";
-            break;
-        case 405:
-            filePath = "./error_pages/error_405.html";
-            break;
-        case 500:
-            filePath = "./error_pages/error_500.html";
-            break;
-        case 505:
-            filePath = "./error_pages/error_505.html";
-            break;
-        default:
-            filePath = "./errors/default.html";  // fallback file
-    }   
-    }
+std::ifstream file(filePath.c_str(), std::ios::binary);
+if (!file.is_open()) {
+    std::cout << filePath << std::endl;
+    return buildHttpResponse("404 Not Found", "text/html", "404 Page Not Found");
+}
+std::ostringstream ss;
+ss << file.rdbuf();
+body = ss.str();
 
-        switch (error) {
-        case 400:
-            status = "400 Bad Request";
-            break;
+response += "HTTP/1.1 " + status + "\r\n";
+response += "Content-Type: text/html\r\n";
+response += "Content-Length: " + to_string(body.size()) + "\r\n";
+response += "Connection: close\r\n";
+response += "Server: webserv/1.0\r\n";
+response += "\r\n";
+response += body;
 
-        case 403:
-            status = "403 Forbidden";
-            break;
-        case 404: 
-            status = "404 Not Found";
-            break;
-        case 405:
-            status = "Method Not Allowed";
-            break;
-        case 500:
-            status = "Internal Server Error";
-            break;
-        case 505:
-            status = "HTTP Version Not Supported";
-            break;
-        default:
-            status = "Error";
-        }
-        
-
-    std::ifstream file(filePath.c_str(), std::ios::binary);
-    if (!file.is_open()) {
-        std::cout << filePath << std::endl;
-        return buildHttpResponse("404 Not Found", "text/html", "404 Page Not Found");
-    }
-    std::ostringstream ss;
-    ss << file.rdbuf();
-    body = ss.str();
-
-	response += "HTTP/1.1 " + status + "\r\n";
-	response += "Content-Type: text/html\r\n";
-	response += "Content-Length: " + to_string(body.size()) + "\r\n";
-	response += "Connection: close\r\n";
-    response += "Server: webserv/1.0\r\n";
-	response += "\r\n";
-	response += body;
-
-	return response;
+return response;
 }
 
 std::string loadFile(const std::string& path) {
@@ -192,6 +201,7 @@ Mais :
 Dans ta fonction buildHttpResponse, tu ajoutes déjà les headers principaux. Pour une vraie redirection, il 
 faut que l’en-tête Location soit inclus dans la partie headers, pas après le body.
 Il vaudrait mieux faire :
+
 
 std::string buildRedirectResponse(const std::string& location) {
     std::string response = "HTTP/1.1 303 See Other\r\n";
