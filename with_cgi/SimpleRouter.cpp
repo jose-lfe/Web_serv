@@ -47,98 +47,133 @@ void printServerConfig(const std::vector<ServerConfig>& configs) // debug functi
         }
     }
 
-    std::string buildHttpResponse(const std::string& status, const std::string& contentType, const std::string& body)
-    {
-        std::string response;
-        response += "HTTP/1.1 " + status + "\r\n";
-        response += "Content-Type: " + contentType + "\r\n";
-        response += "Content-Length: " + to_string(body.size()) + "\r\n";
-        response += "Connection: close\r\n";
-        response += "\r\n";
-        response += body;
-        return response;
-    }
+// std::string buildRedirectionResponse(const Location& loc)
+// {
+//     std::string response = "HTTP/1.1 303 See Other\r\n";
+//     response += "Location: " + loc.redirection + "\r\n";
+//     response += "Content-Length: 0\r\n";
+//     response += "Connection: close\r\n\r\n";
+//     return response;
+// }
+    
+std::string buildHttpResponse(const std::string& status, const std::string& contentType, const std::string& body)
+{
+    std::string response;
+    response += "HTTP/1.1 " + status + "\r\n";
+    response += "Content-Type: " + contentType + "\r\n";
+    response += "Content-Length: " + to_string(body.size()) + "\r\n";
+    response += "Connection: close\r\n";
+    response += "Server: webserv/1.0\r\n";
+    response += "\r\n";
+    response += body;
+    return response;
+}
 
-    std::string buildErrorResponse(int error, std::map<int, std::string> error_pages)
-    {
-        std::string response;
-        std::string filePath;
-        std::string status;
-        std::string body;
-    if (error_pages.find(error) != error_pages.end())
-    {
-        filePath = error_pages.find(error)->second;
-    }
-    else
-    {
-    switch (error)
-    {
-        case 400:
-            filePath = "./error_pages/error_400.html";
-            break;
+std::string buildHtmlEchoResponse(const HandleRequest& req)
+{
+    std::string response;
 
-        case 403:
-            filePath = "./error_pages/error_403.html";
-            break;
-        case 404: 
-            filePath = "./error_pages/error_404.html";
-            break;
-        case 405:
-            filePath = "./error_pages/error_405.html";
-            break;
-        case 500:
-            filePath = "./error_pages/error_500.html";
-            break;
-        case 505:
-            filePath = "./error_pages/error_505.html";
-            break;
-        default:
-            filePath = "./errors/default.html";  // fallback file
-    }   
-    }
+	std::string body =
+		"<html>\n"
+		"  <head><title>POST Echo</title></head>\n"
+		"  <body>\n"
+		"    <h1>POST data received:</h1>\n"
+		"    <pre>" + req.body + "</pre>\n"
+		"  </body>\n"
+		"</html>";
 
-        switch (error) {
-        case 400:
-            status = "400 Bad Request";
-            break;
-
-        case 403:
-            status = "403 Forbidden";
-            break;
-        case 404: 
-            status = "404 Not Found";
-            break;
-        case 405:
-            status = "Method Not Allowed";
-            break;
-        case 500:
-            status = "Internal Server Error";
-            break;
-        case 505:
-            status = "HTTP Version Not Supported";
-            break;
-        default:
-            status = "Error";
-        }
-        
-
-    std::ifstream file(filePath.c_str(), std::ios::binary);
-    if (!file.is_open()) {
-        std::cout << filePath << std::endl;
-        return buildHttpResponse("404 Not Found", "text/html", "404 Page Not Found");
-    }
-    std::ostringstream ss;
-    ss << file.rdbuf();
-    body = ss.str();
-
-	response += "HTTP/1.1 " + status + "\r\n";
-	response += "Content-Type: text/html\r\n";
-	response += "Content-Length: " + to_string(body.size()) + "\r\n";
-	response += "Connection: close\r\n";
-	response += "\r\n";
-	response += body;
+    response += "HTTP/1.1 200 OK\r\n";
+    response += "Content-Type: text/html; charset=UTF-8\r\n";
+    response += "Content-Length: " + to_string(body.size()) + "\r\n";
+    response += "Connection: close\r\n";
+    response += "Server: webserv/1.0\r\n";
+    response += "\r\n";
+    response += body;
 
 	return response;
+}
+
+std::string buildErrorResponse(int error, std::map<int, std::string> error_pages)
+{
+    std::string response;
+    std::string filePath;
+    std::string status;
+    std::string body;
+if (error_pages.find(error) != error_pages.end())
+{
+    filePath = error_pages.find(error)->second;
+}
+else
+{
+switch (error)
+{
+    case 400:
+        filePath = "./error_pages/error_400.html";
+        break;
+
+    case 403:
+        filePath = "./error_pages/error_403.html";
+        break;
+    case 404: 
+        filePath = "./error_pages/error_404.html";
+        break;
+    case 405:
+        filePath = "./error_pages/error_405.html";
+        break;
+    case 500:
+        filePath = "./error_pages/error_500.html";
+        break;
+    case 505:
+        filePath = "./error_pages/error_505.html";
+        break;
+    default:
+        filePath = "./errors/default.html";  // fallback file
+}   
+}
+
+    switch (error) {
+    case 400:
+        status = "400 Bad Request";
+        break;
+
+    case 403:
+        status = "403 Forbidden";
+        break;
+    case 404: 
+        status = "404 Not Found";
+        break;
+    case 405:
+        status = "Method Not Allowed";
+        break;
+    case 500:
+        status = "Internal Server Error";
+        break;
+    case 505:
+        status = "HTTP Version Not Supported";
+        break;
+    default:
+        status = "Error";
+    }
+    
+
+std::ifstream file(filePath.c_str(), std::ios::binary);
+if (!file.is_open()) {
+    std::cout << filePath << std::endl;
+    return buildHttpResponse("404 Not Found", "text/html", "404 Page Not Found");
+}
+std::ostringstream ss;
+ss << file.rdbuf();
+body = ss.str();
+
+response += "HTTP/1.1 " + status + "\r\n";
+response += "Content-Type: text/html\r\n";
+response += "Content-Length: " + to_string(body.size()) + "\r\n";
+response += "Connection: close\r\n";
+response += "Server: webserv/1.0\r\n";
+response += "\r\n";
+response += body;
+
+return response;
 }
 
 std::string loadFile(const std::string& path) {
@@ -166,6 +201,7 @@ Mais :
 Dans ta fonction buildHttpResponse, tu ajoutes déjà les headers principaux. Pour une vraie redirection, il 
 faut que l’en-tête Location soit inclus dans la partie headers, pas après le body.
 Il vaudrait mieux faire :
+
 
 std::string buildRedirectResponse(const std::string& location) {
     std::string response = "HTTP/1.1 303 See Other\r\n";
@@ -201,15 +237,18 @@ std::string getHeaderValue(const std::map<std::string, std::string>& headers, co
     return ""; // Valeur vide si non trouvé
 }
 
-std::vector<std::string> buildCgiEnv(const HandleRequest& req, const std::string& scriptPath) {
+std::vector<std::string> buildCgiEnv(const HandleRequest& req, const std::string& scriptPath, const Location *loc) {
     std::vector<std::string> env;
 
     env.push_back("REQUEST_METHOD=" + req.method);
     env.push_back("SCRIPT_FILENAME=" + scriptPath);
+    env.push_back("PATH_INFO=" + req.path);
+    env.push_back("UPLOAD_DIR=" + loc->upload_store);
     env.push_back("SCRIPT_NAME=" + req.path); // ok tres certainement / ou pas peut etre faire l'inverse de la ligne du bas
     env.push_back("QUERY_STRING=" + extractQueryString(req.path)); // à parser depuis l'URL si besoin
     env.push_back("CONTENT_TYPE=" + trim(getHeaderValue(req.headers, "Content-Type")));
-    env.push_back("CONTENT_LENGTH=" + trim(getHeaderValue(req.headers, "Content-Length")));
+    env.push_back("CONTENT_LENGTH=" + to_string(req.body.size()));
+    //env.push_back("CONTENT_LENGTH=" + trim(getHeaderValue(req.headers, "Content-Length")));
     env.push_back("SERVER_PROTOCOL=HTTP/1.1");
     env.push_back("GATEWAY_INTERFACE=CGI/1.1");
     env.push_back("SERVER_SOFTWARE=webserv");
@@ -241,13 +280,17 @@ bool endsWith(const std::string& str, const std::string& suffix) {
 	return str.compare(str.length() - suffix.length(), suffix.length(), suffix) == 0;
 }
 
-std::string exec_cgi(const HandleRequest& req)
+std::string exec_cgi(const HandleRequest& req, const ServerConfig& configs, const Location *loc, std::string relPath)
+//std::string exec_cgi(const HandleRequest& req, const std::vector<ServerConfig>& configs)
 {
-    std::string scriptPath = "/home/jose-lfe/projects/web/with_cgi/www" + req.path;
-    std::string interpreter = "/usr/bin/php-cgi";
+    std::cout << "inside exec_cgi" << std::endl; // debug
+    std::string scriptPath = "/home/jose-lfe/projects/web/with_cgi/www/" + relPath;
+    std::string interpreter = loc->cgi_path;
     std::string newbody;
+    std::cout << "script path: " << scriptPath << std::endl; // debug
 
-    std::vector<std::string> env_vec = buildCgiEnv(req, scriptPath);
+
+    std::vector<std::string> env_vec = buildCgiEnv(req, scriptPath, loc);
     std::vector<char*> envp;
     for (size_t i = 0; i < env_vec.size(); ++i)
         envp.push_back(const_cast<char*>(env_vec[i].c_str()));
@@ -265,7 +308,7 @@ std::string exec_cgi(const HandleRequest& req)
     pid_t pid = fork();
     if (pid < 0) {
         perror("fork");
-        return buildHttpResponse("500 Internal Server Error", "text/plain", "Fork error");
+        return buildErrorResponse(500, configs.error_pages);
     }
 
     if (pid == 0) {
@@ -286,10 +329,18 @@ std::string exec_cgi(const HandleRequest& req)
     close(out_pipe[1]);
 
     // Envoie le body POST au CGI
-    if (!req.body.empty()) {
-        ssize_t written = write(in_pipe[1], req.body.c_str(), req.body.size());
-        if (written < 0) perror("write to CGI stdin");
+if (!req.body.empty()) {
+    size_t total_written = 0;
+    while (total_written < req.body.size()) {
+        ssize_t written = write(in_pipe[1], req.body.c_str() + total_written, req.body.size() - total_written);
+        if (written < 0) {
+            perror("write to CGI stdin");
+            break;
+        }
+        total_written += written;
     }
+    std::cerr << "Total written to CGI stdin: " << total_written << " bytes" << std::endl;
+}
     std::cerr << "Body size: " << req.body.size() << " / Content-Length: " << getHeaderValue(req.headers, "Content-Length") << std::endl; // pour debug
     close(in_pipe[1]);
 
@@ -312,7 +363,7 @@ std::string exec_cgi(const HandleRequest& req)
     } else {
         body = newbody;
     }
-
+    std::cerr << "newbody size: " << newbody.size() << " body size: " << body.size() << std::endl;
     std::string contentType = "text/html";
     std::istringstream hstream(headers);
     std::string line;
@@ -382,12 +433,61 @@ const ServerConfig* findMatchingConfig(const HandleRequest& req, const std::vect
     return NULL;
 }
 
+const Location* findMatchingLocationWithName(const HandleRequest &req, const ServerConfig* conf)
+{
+    std::cout << "trouver le serveur_name" << std::endl;
+    const Location* bestLoc = NULL;
+    size_t bestLen = 0;
+    for (size_t i = 0; i < conf->routes.size(); ++i)
+    {
+        const Location& loc = conf->routes[i];
+        if (req.path.find(loc.path) == 0 && loc.path.length() > bestLen)
+        {
+            bestLoc = &loc;
+            bestLen = loc.path.length();
+        }
+    }
+    if (!bestLoc)
+    {
+        for (size_t i = 0; i < conf->routes.size(); ++i)
+        {
+            if (conf->routes[i].path == "/") 
+            {
+                return &conf->routes[i];
+            }
+        }
+    }
+    if (!bestLoc)
+        return NULL;
+    return bestLoc;
+}
+
 const Location* findMatchingLocation(const HandleRequest& req, const std::vector<ServerConfig>& _configs, const ServerConfig** conf)
 {
     const Location* bestLoc = NULL;
     const ServerConfig* tmp_conf = NULL;
     size_t bestLen = 0;
-    for (int i = 0; i < _configs.size(); i++)
+
+    for (size_t i = 0; i < _configs.size(); i++)
+    {
+        tmp_conf = &_configs[i];
+        if (!tmp_conf->server_name.empty())
+        {
+            std::cout << "server config numero " << i << ", a une instruction server_name." << std::endl; //debug
+            for (size_t j = 0; j < tmp_conf->server_name.size(); j++)
+            {
+                std::cout << req.headers.at("Host") << std::endl; // debug
+                std::cout << tmp_conf->server_name[j] << std::endl; // debug
+                if (req.headers.count("Host") && req.headers.at("Host") == tmp_conf->server_name[j])
+                {
+                    *conf = tmp_conf;
+                    return findMatchingLocationWithName(req, tmp_conf);
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < _configs.size(); i++)
     {
         tmp_conf = &_configs[i];
         for (size_t i = 0; i < tmp_conf->routes.size(); ++i)
@@ -405,15 +505,15 @@ const Location* findMatchingLocation(const HandleRequest& req, const std::vector
     // Si aucune location ne matche, cherche la location "/"
     if (!bestLoc) 
     {
-        for (int i = 0; i < _configs.size(); i++)
+        for (size_t i = 0; i < _configs.size(); i++)
         {
             tmp_conf = &_configs[i];
-            for (size_t i = 0; i < tmp_conf->routes.size(); ++i)
+            for (size_t j = 0; j < tmp_conf->routes.size(); ++j)
             {
-                if (tmp_conf->routes[i].path == "/") 
+                if (tmp_conf->routes[j].path == "/") 
                 {
                     *conf = tmp_conf;
-                    return &tmp_conf->routes[i];
+                    return &tmp_conf->routes[j];
                 }
             }
         }
@@ -472,29 +572,272 @@ std::string getMimeType(const std::string& path) {
     return "application/octet-stream"; // Type par défaut
 }
 
+std::string buildRedirectionResponse(const std::string& location,
+									 const std::string& userAgent = "",
+									 const std::string& status = "303 See Other") {
+	std::ostringstream response;
+	std::string body;
+	std::string contentType;
+
+	// Détection simple de curl
+	bool isCurl = userAgent.find("curl") != std::string::npos;
+
+	if (isCurl) {
+		contentType = "text/plain";
+		body = "Redirecting to: " + location + "\n";
+	} else {
+		contentType = "text/html";
+		std::ostringstream htmlBody;
+		htmlBody << "<html><head><meta http-equiv=\"refresh\" content=\"1; URL=" << location << "\">"
+				 << "<title>Redirecting...</title></head><body>"
+				 << "<h1>Redirecting...</h1>"
+				 << "<p>If you're not redirected automatically, <a href=\"" << location << "\">click here</a>.</p>"
+				 << "</body></html>";
+		body = htmlBody.str();
+	}
+
+	// Construction de la réponse complète
+	response << "HTTP/1.1 " << status << "\r\n";
+	response << "Location: " << location << "\r\n";
+	response << "Content-Type: " << contentType << "\r\n";
+	response << "Content-Length: " << body.size() << "\r\n";
+	response << "Connection: close\r\n";
+	response << "\r\n";
+	response << body;
+
+	return response.str();
+}
+
+std::string handleDelete(const HandleRequest& req, const std::vector<ServerConfig>& _configs)
+{
+	std::string cleanPath = req.path;
+	size_t qmark = cleanPath.find('?');
+	if (qmark != std::string::npos) {
+    cleanPath = cleanPath.substr(0, qmark);
+	}
+	const ServerConfig *conf;
+	const Location* loc = findMatchingLocation(req, _configs, &conf);
+	if (!loc)
+		return buildErrorResponse(404, conf->error_pages);
+	if (!isMethodAllowed(loc, loc->methods, "DELETE"))
+		return buildErrorResponse(405, conf->error_pages);
+
+	std::string baseRoot = loc->root;
+	std::string relPath = cleanPath;
+
+	if (relPath.find(loc->path) == 0)
+		relPath = relPath.substr(loc->path.length());
+	if (!relPath.empty() && relPath[0] == '/')
+		relPath = relPath.substr(1);
+
+	std::string filePath = baseRoot;
+	if (!filePath.empty() && filePath.back() != '/')
+		filePath += "/";
+	filePath += relPath;
+
+	std::cout << "DELETE filePath: " << filePath << std::endl;
+
+	struct stat st;
+	if (stat(filePath.c_str(), &st) != 0)
+		return buildErrorResponse(404, conf->error_pages);
+	if (access(filePath.c_str(), W_OK) != 0)
+		return buildErrorResponse(403, conf->error_pages);
+	if (remove(filePath.c_str()) != 0)
+		return buildErrorResponse(500, conf->error_pages);
+
+	std::string redirectTarget = loc->path;
+	std::cout << std::endl << "reqheader is : " << req.headers.at(("User-Agent")) << std::endl;
+	return buildRedirectionResponse(redirectTarget, req.headers.at("User-Agent"));
+}
+
+
+// std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>& _configs)
+// {
+// //     const ServerConfig* conf = findMatchingConfig(req, _configs);
+// //     if (!conf) {
+// //        return buildHttpResponse("500 Internal Server Error", "text/plain", "No matching server configuration");
+// //     }
+	
+// 	std::cout << "[HandleGET] Path: " << req.path << std::endl;
+//     const ServerConfig* conf;
+//     const Location* loc = findMatchingLocation(req, _configs, &conf);
+//     if (!loc) {
+//         return buildHttpResponse("404 Not Found", "text/plain", "404 Page Not Found");
+//     }
+//     // Vérifie la redirection ici
+//     if (!loc->redirection.empty()) {
+//         // 302 Found ou 301 Moved Permanently selon ton besoin
+//         std::string response = "HTTP/1.1 302 Found\r\n";
+//         response += "Location: " + loc->redirection + "\r\n";
+//         response += "Content-Length: 0\r\n";
+//         response += "Connection: close\r\n\r\n";
+//         return response;
+//     }
+//     if (!isMethodAllowed(loc, loc->methods, "GET")) {
+//         return buildHttpResponse("405 Method Not Allowed", "text/plain", "405 Method Not Allowed");
+//     }
+
+// 	// Cas spécial : afficher galerie dynamique
+// 	if (req.path == "/" || req.path == "/photos") {
+// 	std::string templateHtml = loadFile("www/template/gallery.html");
+// 	if (templateHtml.empty()) {
+// 		return buildHttpResponse("500 Internal Server Error", "text/plain", "Failed to load template.");
+// 	}
+
+// 	std::string photosHtml = generatePhotoEntriesHtml("www/photos");
+// 	size_t pos = templateHtml.find("{{PHOTO_LIST}}");
+// 	if (pos != std::string::npos) {
+// 		templateHtml.replace(pos, 14, photosHtml);
+// 		return buildHttpResponse("200 OK", "text/html", templateHtml);
+// 	}
+// 	return buildHttpResponse("500 Internal Server Error", "text/plain", "Template placeholder not found.");
+// 	}
+
+	
+//     // 1. Déterminer le root à utiliser
+//     std::string baseRoot;
+//     baseRoot = loc->root;
+//     // 2. Construire le chemin relatif à partir du path de la requête et du chemin de la location
+//     std::string relPath = req.path;
+//     if (relPath.find(loc->path) == 0)
+//         relPath = relPath.substr(loc->path.length());
+//     if (!relPath.empty() && relPath[0] == '/')
+//         relPath = relPath.substr(1);
+//     std::cout << std::endl << relPath << std::endl << std::endl;
+
+//     // 3. Construire le chemin réel
+//     std::string filePath = baseRoot;
+//     if (!filePath.empty() && filePath[filePath.size() - 1] != '/')
+//         filePath += "/";
+//     filePath += relPath;
+//     std::cout << "GET filePath: " << filePath << std::endl; // pour debug
+
+//     // 4. Lire le fichier
+//     struct stat st;
+//     if (stat(filePath.c_str(), &st) != 0) {
+//         return buildErrorResponse(404, conf->error_pages);
+//     }
+//     if (S_ISREG(st.st_mode))
+//     {
+//         std::cout << "Is a file: " << filePath << std::endl; // pour debug
+
+//         // Vérifie les droits d'accès en lecture
+//         if (access(filePath.c_str(), R_OK) != 0) {
+//             return buildHttpResponse("403 Forbidden", "text/plain", "Permission denied");
+//         }
+
+//         // Détermine le type MIME
+//         std::string contentType = getMimeType(filePath);
+
+//         // Lit le fichier
+//         std::ifstream file(filePath.c_str(), std::ios::binary);
+//         if (!file.is_open()) {
+//             return buildHttpResponse("500 Internal Server Error", "text/plain", "Failed to open file");
+//         }
+//         std::ostringstream ss;
+//         ss << file.rdbuf();
+//         std::string body = ss.str();
+// 		if (filePath == "www/template/gallery.html")
+// 		{
+// 			size_t pos = body.find("{{PHOTO_LIST}}");
+//     		if (pos != std::string::npos)
+// 			{
+// 				std::string photosHtml = generatePhotoEntriesHtml("www/photos");
+// 				body.replace(pos, 14, photosHtml);
+//     		}
+// 		}
+
+//         return buildHttpResponse("200 OK", contentType, body);
+//     }
+//     else if (S_ISDIR(st.st_mode))
+//     {
+//         std::cout << "Is a directory: " << filePath << std::endl; //pour debug
+//         if (!loc->index.empty())
+//         {
+//             // Si c'est un répertoire, on cherche le fichier index
+//             std::string indexPath = filePath;
+//             if (indexPath.back() != '/')
+//                 indexPath += "/";
+//             indexPath += loc->index;
+//             std::cout << "Index path: " << indexPath << std::endl; //pour debug
+
+
+//             std::ifstream f(indexPath.c_str());
+//             if (!f) {
+//                 return buildErrorResponse(404, conf->error_pages);
+//             }
+//             std::ostringstream s;
+//             s << f.rdbuf();
+//             std::string body = s.str();
+//             return buildHttpResponse("200 OK", getMimeType(indexPath), body);
+//         }
+//         else if (loc->autoindex)
+//         {
+//             /*DIR* dir = opendir(filePath.c_str());
+//             if (!dir) {
+//                 return buildHttpResponse("403 Forbidden", "text/plain", "Cannot open directory");
+//             }
+//             std::ostringstream html;
+//             html << "<html><head><title>Index of " << req.path << "</title></head><body>";
+//             html << "<h1>Index of " << req.path << "</h1><ul>";
+
+//             struct dirent* entry;
+//             while ((entry = readdir(dir)) != NULL) {
+//                 std::string name = entry->d_name;
+//                 if (name == ".") continue;
+//                 html << "<li><a href=\"" << req.path;
+//                 if (req.path[req.path.size()-1] != '/')
+//                     html << "/";
+//                 html << name << "\">" << name << "</a></li>";
+//             }
+//             closedir(dir);
+
+//             html << "</ul></body></html>";
+//             return buildHttpResponse("200 OK", "text/html", html.str());*/
+// 			std::string html = generateAutoindexHtml(filePath, req.path);
+// 			if (html == "500")
+// 				return buildErrorResponse(500, conf->error_pages);
+// 			if (html == "403")
+// 				return buildErrorResponse(403, conf->error_pages);
+//     		return buildHttpResponse("200 OK", "text/html", html);
+
+//         }
+//     }
+//     return buildHttpResponse("403 Forbidden", "text/plain", "403 Forbidden");
+// }
+
 std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>& _configs)
 {
-//     const ServerConfig* conf = findMatchingConfig(req, _configs);
-//     if (!conf) {
-//        return buildHttpResponse("500 Internal Server Error", "text/plain", "No matching server configuration");
-//     }
     const ServerConfig* conf;
     const Location* loc = findMatchingLocation(req, _configs, &conf);
     if (!loc) {
-        return buildHttpResponse("404 Not Found", "text/plain", "404 Page Not Found");
+        return buildErrorResponse(404, _configs[0].error_pages);
     }
     // Vérifie la redirection ici
-    if (!loc->redirection.empty()) {
-        // 302 Found ou 301 Moved Permanently selon ton besoin
-        std::string response = "HTTP/1.1 302 Found\r\n";
-        response += "Location: " + loc->redirection + "\r\n";
-        response += "Content-Length: 0\r\n";
-        response += "Connection: close\r\n\r\n";
-        return response;
+    if (!loc->redirection.empty())
+	{
+		return buildRedirectionResponse(loc->redirection, req.headers.at("User-Agent"));
     }
     if (!isMethodAllowed(loc, loc->methods, "GET")) {
-        return buildHttpResponse("405 Method Not Allowed", "text/plain", "405 Method Not Allowed");
+        return buildErrorResponse(405, conf->error_pages);
     }
+
+	// Cas spécial : afficher galerie dynamique
+	// if (req.path == "/" || req.path == "/photos") {
+	// std::string templateHtml = loadFile("www/template/gallery.html");
+	// if (templateHtml.empty()) {
+	// 	return buildHttpResponse("500 Internal Server Error", "text/plain", "Failed to load template.");
+	// }
+
+	// std::string photosHtml = generatePhotoEntriesHtml("www/photos");
+	// size_t pos = templateHtml.find("{{PHOTO_LIST}}");
+	// if (pos != std::string::npos) {
+	// 	templateHtml.replace(pos, 14, photosHtml);
+	// 	return buildHttpResponse("200 OK", "text/html", templateHtml);
+	// }
+	// return buildHttpResponse("500 Internal Server Error", "text/plain", "Template placeholder not found.");
+	// }
+
     // 1. Déterminer le root à utiliser
     std::string baseRoot;
     baseRoot = loc->root;
@@ -524,7 +867,7 @@ std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>&
 
         // Vérifie les droits d'accès en lecture
         if (access(filePath.c_str(), R_OK) != 0) {
-            return buildHttpResponse("403 Forbidden", "text/plain", "Permission denied");
+            return buildErrorResponse(403, conf->error_pages);
         }
 
         // Détermine le type MIME
@@ -533,7 +876,7 @@ std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>&
         // Lit le fichier
         std::ifstream file(filePath.c_str(), std::ios::binary);
         if (!file.is_open()) {
-            return buildHttpResponse("500 Internal Server Error", "text/plain", "Failed to open file");
+            return buildErrorResponse(500, conf->error_pages);
         }
         std::ostringstream ss;
         ss << file.rdbuf();
@@ -564,44 +907,103 @@ std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>&
             return buildHttpResponse("200 OK", getMimeType(indexPath), body);
         }
         else if (loc->autoindex)
-        {
-            DIR* dir = opendir(filePath.c_str());
-            if (!dir) {
-                return buildHttpResponse("403 Forbidden", "text/plain", "Cannot open directory");
-            }
-            std::ostringstream html;
-            html << "<html><head><title>Index of " << req.path << "</title></head><body>";
-            html << "<h1>Index of " << req.path << "</h1><ul>";
-
-            struct dirent* entry;
-            while ((entry = readdir(dir)) != NULL) {
-                std::string name = entry->d_name;
-                if (name == ".") continue;
-                html << "<li><a href=\"" << req.path;
-                if (req.path[req.path.size()-1] != '/')
-                    html << "/";
-                html << name << "\">" << name << "</a></li>";
-            }
-            closedir(dir);
-
-            html << "</ul></body></html>";
-            return buildHttpResponse("200 OK", "text/html", html.str());
-        }
+		{
+			std::string html = generateAutoindexHtml(filePath, req.path);
+			if (html == "500")
+				return buildErrorResponse(500, conf->error_pages);
+			if (html == "403")
+				return buildErrorResponse(403, conf->error_pages);
+    		return buildHttpResponse("200 OK", "text/html", html);
+		}
     }
-    return buildHttpResponse("403 Forbidden", "text/plain", "403 Forbidden");
+    return buildErrorResponse(403, conf->error_pages);
+}
+
+std::string HandlePOST(const HandleRequest& req, const std::vector<ServerConfig>& _configs)
+{
+    /*
+    le but:
+    consigne hyper large alors on vas decider que si on recois Post avec exec -> upload
+    sinon ca deviendra une sorte de echo
+    */
+       const ServerConfig* conf;
+    const Location* loc = findMatchingLocation(req, _configs, &conf);
+    if (!loc) {
+        return buildErrorResponse(404, _configs[0].error_pages);
+    }
+    std::cout << "Loc de POST" << loc->path << std::endl; // debug
+    // Vérifie la redirection ici
+    if (!loc->redirection.empty()) {
+        // 302 Found ou 301 Moved Permanently selon ton besoin
+        std::string response = "HTTP/1.1 302 Found\r\n";
+        response += "Location: " + loc->redirection + "\r\n";
+        response += "Content-Length: 0\r\n";
+        response += "Connection: close\r\n\r\n";
+        return response;
+    }
+    if (!isMethodAllowed(loc, loc->methods, "GET"))
+    {
+        return buildErrorResponse(405, conf->error_pages);
+    }
+    // 1. Déterminer le root à utiliser
+    std::string baseRoot;
+    baseRoot = loc->root;
+    // 2. Construire le chemin relatif à partir du path de la requête et du chemin de la location
+    std::string relPath = req.path;
+    if (relPath.find(loc->path) == 0)
+        relPath = relPath.substr(loc->path.length());
+    if (!relPath.empty() && relPath[0] == '/')
+        relPath = relPath.substr(1);
+    std::cout << std::endl << relPath << std::endl << std::endl;
+
+    // 3. Construire le chemin réel
+    std::string filePath = baseRoot;
+    if (!filePath.empty() && filePath[filePath.size() - 1] != '/')
+        filePath += "/";
+    filePath += relPath;
+    std::cout << "GET filePath: " << filePath << std::endl; // pour debug
+
+    //upload
+    if (!loc->upload_store.empty())
+    {
+        std::cout << "Condition !loc->upload_store.empty()" << std::endl; // pour debug
+        if (endsWith(req.path, ".php") && !loc->cgi_extension.empty())
+            return exec_cgi(req, *conf, loc, relPath);
+        return buildErrorResponse(405, conf->error_pages); // ou 400
+    }
+    //cgi random
+    if (endsWith(req.path, ".php") && !loc->cgi_extension.empty())
+    {
+        return exec_cgi(req, *conf, loc, relPath);
+    }
+    // filePath est un fichier donc ambigue donc erreur
+    struct stat st;
+    if (stat(filePath.c_str(), &st) != 0)
+    {
+        return buildErrorResponse(404, conf->error_pages);
+    }
+    if (S_ISREG(st.st_mode))
+    {
+        buildErrorResponse(405, conf->error_pages);
+    }
+    //echo
+    return buildHtmlEchoResponse(req);
+
 }
 
 std::string SimpleRouter::route(const HandleRequest& req, const std::vector<ServerConfig>& _configs) {
 	std::string method = req.method;
 	std::string path = req.path;
 
-    printServerConfig(_configs); // pour debug
+    //printServerConfig(_configs); // pour debug
 
     if (req.http_version != "HTTP/1.1")
-        return buildErrorResponse(505, _configs[0].error_pages);
-	// Route pour la page d'accueil (album)
+            return buildErrorResponse(505, _configs[0].error_pages);
     if (method == "GET")
         return HandleGET(req, _configs);
+    if (method == "POST")
+        return HandlePOST(req, _configs);
+        //Route pour la page d'accueil (album)
 	if (method == "GET" && (path == "/" || path == "/photos")) {
 		std::string templateHtml = loadFile("www/template/gallery.html");
 		if (templateHtml.empty()) {
@@ -653,11 +1055,11 @@ std::string SimpleRouter::route(const HandleRequest& req, const std::vector<Serv
         }
     }
 
-	if (method == "POST" && endsWith(path, ".php")) // surement changer la logique en fonction des location mais pour l'instant c'est pour test
-	{
-		return exec_cgi(req);
-		//return buildHttpResponse("200 OK", "text/plain", "PHP script executed successfully.");
-	}
+	// if (method == "POST" && endsWith(path, ".php")) // surement changer la logique en fonction des location mais pour l'instant c'est pour test
+	// {
+	// 	return exec_cgi(req, _configs);
+	// 	//return buildHttpResponse("200 OK", "text/plain", "PHP script executed successfully.");
+	// }
 
 	// JSON endpoint (démo)
 	if (method == "GET" && path == "/json") {

@@ -215,7 +215,7 @@ std::vector<ServerConfig> parseConfig(const std::string& path) {
                     std::string page = removeSemicolon(tokens[2]);
                     current.error_pages[code] = page;
                 }
-                else if (key == "upload_store") {
+                else if (key == "upload_dir") {
                     if (in_location)
                         current_location.upload_store = value;
                 }

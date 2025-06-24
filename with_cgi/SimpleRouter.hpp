@@ -13,6 +13,7 @@
 #include <sys/wait.h>
 #include <cstring>
 #include "Struct.hpp"
+#include "autoindex.hpp"
 
 class SimpleRouter {
 public:

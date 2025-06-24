@@ -173,27 +173,65 @@ void HttpServer::handleRead(int fd, int epoll_fd) {
     if (headers_end == std::string::npos)
         return; // On n'a pas encore tous les headers
 
-    // Cherche Content-Length
-    size_t content_length = 0;
     std::string headers = _readBuffers[fd].substr(0, headers_end);
+    bool is_chunked = false;
+    size_t content_length = 0;
     std::istringstream hstream(headers);
     std::string line;
     while (std::getline(hstream, line)) {
+        if (line.find("Transfer-Encoding:") == 0 && line.find("chunked") != std::string::npos) {
+            is_chunked = true;
+        }
         if (line.find("Content-Length:") == 0) {
             std::string value = line.substr(15);
             value.erase(0, value.find_first_not_of(" \t"));
             content_length = std::atoi(value.c_str());
-            break;
         }
     }
 
-    size_t total_needed = headers_end + 4 + content_length;
-    // Si Content-Length > 0, attendre tout le body
-    if (content_length > 0 && _readBuffers[fd].size() < total_needed)
-        return; // On n'a pas encore tout le body
-
-    // On a tout reçu : headers + body (ou juste headers pour GET)
-    std::string full_request = _readBuffers[fd].substr(0, total_needed);
+    std::string full_request;
+    if (is_chunked) {
+        // On a tous les headers, mais on ne sait pas la taille totale du body à l'avance
+        std::string chunked_body = _readBuffers[fd].substr(headers_end + 4);
+        std::string dechunked;
+        size_t pos = 0;
+        while (true) {
+            size_t crlf = chunked_body.find("\r\n", pos);
+            if (crlf == std::string::npos) return; // attendre plus de données
+            std::string len_str = chunked_body.substr(pos, crlf - pos);
+            int chunk_size = std::strtol(len_str.c_str(), NULL, 16);
+            pos = crlf + 2;
+            if (chunk_size == 0) {
+                // Vérifie qu'on a bien le chunk final "0\r\n\r\n"
+                if (chunked_body.find("\r\n", pos) == pos) {
+                    pos += 2;
+                    if (chunked_body.find("\r\n", pos) == pos) {
+                        pos += 2;
+                    }
+                }
+                break;
+            }
+            if (chunked_body.size() < pos + chunk_size + 2) return; // pas tout reçu
+            dechunked += chunked_body.substr(pos, chunk_size);
+            pos += chunk_size + 2; // skip \r\n après chunk
+        }
+        // Supprime le header Transfer-Encoding: chunked
+        std::string new_headers;
+        std::istringstream hstream2(headers);
+        while (std::getline(hstream2, line)) {
+            if (line.find("Transfer-Encoding:") == 0 && line.find("chunked") != std::string::npos)
+                continue;
+            new_headers += line + "\r\n";
+        }
+        full_request = new_headers + "\r\n" + dechunked;
+    } else {
+        size_t total_needed = headers_end + 4 + content_length;
+        // Si Content-Length > 0, attendre tout le body
+        if (content_length > 0 && _readBuffers[fd].size() < total_needed)
+            return; // On n'a pas encore tout le body
+        // On a tout reçu : headers + body (ou juste headers pour GET)
+        full_request = _readBuffers[fd].substr(0, total_needed);
+    }
 
     std::cout << "Requête HTTP complète reçue depuis fd=" << fd << " :\n"
               << full_request << std::endl;
@@ -204,6 +242,7 @@ void HttpServer::handleRead(int fd, int epoll_fd) {
     } else {
         std::cerr << "Failed to parse HTTP request on fd=" << fd << std::endl;
         closeClient(fd, epoll_fd);
+        _readBuffers.erase(fd);
         return;
     }
 
