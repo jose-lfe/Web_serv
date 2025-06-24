@@ -1,232 +1,59 @@
-std::string handleDelete(const HandleRequest& req, const std::vector<ServerConfig>& _configs)
-{
-	std::string cleanPath = req.path;
-	size_t qmark = cleanPath.find('?');
-	if (qmark != std::string::npos) {
-    cleanPath = cleanPath.substr(0, qmark);
-	}
-	const ServerConfig *conf;
-	const Location* loc = findMatchingLocation(req, _configs, &conf);
-	if (!loc)
-		return buildErrorResponse(404, conf->error_pages);
-	if (!isMethodAllowed(loc, loc->methods, "DELETE"))
-		return buildErrorResponse(405, conf->error_pages);
-
-	std::string baseRoot = loc->root;
-	std::string relPath = cleanPath;
-
-	if (relPath.find(loc->path) == 0)
-		relPath = relPath.substr(loc->path.length());
-	if (!relPath.empty() && relPath[0] == '/')
-		relPath = relPath.substr(1);
-
-	std::string filePath = baseRoot;
-	if (!filePath.empty() && filePath.back() != '/')
-		filePath += "/";
-	filePath += relPath;
-
-	std::cout << "DELETE filePath: " << filePath << std::endl;
-
-	struct stat st;
-	if (stat(filePath.c_str(), &st) != 0)
-		return buildErrorResponse(404, conf->error_pages);
-	if (access(filePath.c_str(), W_OK) != 0)
-		return buildErrorResponse(403, conf->error_pages);
-	if (remove(filePath.c_str()) != 0)
-		return buildErrorResponse(500, conf->error_pages);
-
-	std::string redirectTarget = loc->path;
-	std::cout << std::endl << "reqheader is : " << req.headers.at(("User-Agent")) << std::endl;
-	return buildRedirectionResponse(redirectTarget, req.headers.at("User-Agent"));
-}
-
-std::string buildRedirectionResponse(const std::string& location,
-                                     const std::string& userAgent = "",
-                                     const std::string& status = "303 See Other") {
-    std::ostringstream response;
-    std::string body;
-    std::string contentType;
-
-    // Détection simple de curl
-    bool isCurl = userAgent.find("curl") != std::string::npos;
-
-    if (isCurl) {
-        contentType = "text/plain";
-        body = "Resource deleted. Redirecting to: " + location + "\n";
-    } else {
-        contentType = "text/html";
-        std::ostringstream htmlBody;
-        htmlBody << "<html><head><meta http-equiv=\"refresh\" content=\"1; URL=" << location << "\">"
-                 << "<title>Redirecting...</title></head><body>"
-                 << "<h1>Redirecting...</h1>"
-                 << "<p>If you're not redirected automatically, <a href=\"" << location << "\">click here</a>.</p>"
-                 << "</body></html>";
-        body = htmlBody.str();
-    }
-
-    // Construction de la réponse complète
-    response << "HTTP/1.1 " << status << "\r\n";
-    response << "Location: " << location << "\r\n";
-    response << "Content-Type: " << contentType << "\r\n";
-    response << "Content-Length: " << body.size() << "\r\n";
-    response << "Connection: close\r\n";
-    response << "\r\n";
-    response << body;
-
-    return response.str();
-}
-
-std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>& _configs)
-{
-//     const ServerConfig* conf = findMatchingConfig(req, _configs);
-//     if (!conf) {
-//        return buildHttpResponse("500 Internal Server Error", "text/plain", "No matching server configuration");
-//     }
-	
-	std::cout << "[HandleGET] Path: " << req.path << std::endl;
-    const ServerConfig* conf;
-    const Location* loc = findMatchingLocation(req, _configs, &conf);
-    if (!loc) {
-        return buildHttpResponse("404 Not Found", "text/plain", "404 Page Not Found");
-    }
-    // Vérifie la redirection ici
-    if (!loc->redirection.empty()) {
-        // 302 Found ou 301 Moved Permanently selon ton besoin
-        std::string response = "HTTP/1.1 302 Found\r\n";
-        response += "Location: " + loc->redirection + "\r\n";
-        response += "Content-Length: 0\r\n";
-        response += "Connection: close\r\n\r\n";
-        return response;
-    }
-    if (!isMethodAllowed(loc, loc->methods, "GET")) {
-        return buildHttpResponse("405 Method Not Allowed", "text/plain", "405 Method Not Allowed");
-    }
-
-	// Cas spécial : afficher galerie dynamique
-	if (req.path == "/" || req.path == "/photos") {
-	std::string templateHtml = loadFile("www/template/gallery.html");
-	if (templateHtml.empty()) {
-		return buildHttpResponse("500 Internal Server Error", "text/plain", "Failed to load template.");
+std::string generateAutoindexHtml(const std::string& dirPath, const std::string& urlPath) {
+    std::string templateHtml = loadTemplate("./autoindex/autoindex.html");
+    if (templateHtml.empty())
+	{
+		return "500";
 	}
 
-	std::string photosHtml = generatePhotoEntriesHtml("www/photos");
-	size_t pos = templateHtml.find("{{PHOTO_LIST}}");
-	if (pos != std::string::npos) {
-		templateHtml.replace(pos, 14, photosHtml);
-		return buildHttpResponse("200 OK", "text/html", templateHtml);
+    DIR* dir = opendir(dirPath.c_str());
+    if (!dir)
+	{
+		return "403";
 	}
-	return buildHttpResponse("500 Internal Server Error", "text/plain", "Template placeholder not found.");
-	}
+    std::ostringstream rows;
 
-	
-    // 1. Déterminer le root à utiliser
-    std::string baseRoot;
-    baseRoot = loc->root;
-    // 2. Construire le chemin relatif à partir du path de la requête et du chemin de la location
-    std::string relPath = req.path;
-    if (relPath.find(loc->path) == 0)
-        relPath = relPath.substr(loc->path.length());
-    if (!relPath.empty() && relPath[0] == '/')
-        relPath = relPath.substr(1);
-    std::cout << std::endl << relPath << std::endl << std::endl;
-
-    // 3. Construire le chemin réel
-    std::string filePath = baseRoot;
-    if (!filePath.empty() && filePath[filePath.size() - 1] != '/')
-        filePath += "/";
-    filePath += relPath;
-    std::cout << "GET filePath: " << filePath << std::endl; // pour debug
-
-    // 4. Lire le fichier
-    struct stat st;
-    if (stat(filePath.c_str(), &st) != 0) {
-        return buildErrorResponse(404, conf->error_pages);
+    // Parent folder link
+    if (urlPath != "/") {
+        std::string parent = urlPath;
+        if (parent.back() == '/') parent.pop_back();
+        size_t slash = parent.find_last_of('/');
+        parent = (slash != std::string::npos) ? parent.substr(0, slash) : "/";
+        if (parent.empty()) parent = "/";
+        rows << formatFileRow(parent + "/", "../", "", "");
     }
-    if (S_ISREG(st.st_mode))
-    {
-        std::cout << "Is a file: " << filePath << std::endl; // pour debug
 
-        // Vérifie les droits d'accès en lecture
-        if (access(filePath.c_str(), R_OK) != 0) {
-            return buildHttpResponse("403 Forbidden", "text/plain", "Permission denied");
-        }
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL) {
+        std::string name = entry->d_name;
+        if (name == ".") continue;
 
-        // Détermine le type MIME
-        std::string contentType = getMimeType(filePath);
+        std::string fullPath = dirPath + "/" + name;
+        struct stat fileStat;
+        if (stat(fullPath.c_str(), &fileStat) == -1) continue;
 
-        // Lit le fichier
-        std::ifstream file(filePath.c_str(), std::ios::binary);
-        if (!file.is_open()) {
-            return buildHttpResponse("500 Internal Server Error", "text/plain", "Failed to open file");
-        }
-        std::ostringstream ss;
-        ss << file.rdbuf();
-        std::string body = ss.str();
-		if (filePath == "www/template/gallery.html")
-		{
-			size_t pos = body.find("{{PHOTO_LIST}}");
-    		if (pos != std::string::npos)
-			{
-				std::string photosHtml = generatePhotoEntriesHtml("www/photos");
-				body.replace(pos, 14, photosHtml);
-    		}
-		}
+        std::string href = urlPath;
+        if (href.back() != '/') href += "/";
+        href += name;
+        if (S_ISDIR(fileStat.st_mode)) href += "/";
 
-        return buildHttpResponse("200 OK", contentType, body);
+        std::string size = S_ISDIR(fileStat.st_mode) ? "Directory" : std::to_string(fileStat.st_size) + " B";
+
+        char timebuf[80];
+        strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", localtime(&fileStat.st_mtime));
+
+        rows << formatFileRow(href, name, size, timebuf);
     }
-    else if (S_ISDIR(st.st_mode))
-    {
-        std::cout << "Is a directory: " << filePath << std::endl; //pour debug
-        if (!loc->index.empty())
-        {
-            // Si c'est un répertoire, on cherche le fichier index
-            std::string indexPath = filePath;
-            if (indexPath.back() != '/')
-                indexPath += "/";
-            indexPath += loc->index;
-            std::cout << "Index path: " << indexPath << std::endl; //pour debug
+    closedir(dir);
 
-
-            std::ifstream f(indexPath.c_str());
-            if (!f) {
-                return buildErrorResponse(404, conf->error_pages);
-            }
-            std::ostringstream s;
-            s << f.rdbuf();
-            std::string body = s.str();
-            return buildHttpResponse("200 OK", getMimeType(indexPath), body);
-        }
-        else if (loc->autoindex)
-        {
-            /*DIR* dir = opendir(filePath.c_str());
-            if (!dir) {
-                return buildHttpResponse("403 Forbidden", "text/plain", "Cannot open directory");
-            }
-            std::ostringstream html;
-            html << "<html><head><title>Index of " << req.path << "</title></head><body>";
-            html << "<h1>Index of " << req.path << "</h1><ul>";
-
-            struct dirent* entry;
-            while ((entry = readdir(dir)) != NULL) {
-                std::string name = entry->d_name;
-                if (name == ".") continue;
-                html << "<li><a href=\"" << req.path;
-                if (req.path[req.path.size()-1] != '/')
-                    html << "/";
-                html << name << "\">" << name << "</a></li>";
-            }
-            closedir(dir);
-
-            html << "</ul></body></html>";
-            return buildHttpResponse("200 OK", "text/html", html.str());*/
-			std::string html = generateAutoindexHtml(filePath, req.path);
-			if (html == "500")
-				return buildErrorResponse(500, conf->error_pages);
-			if (html == "403")
-				return buildErrorResponse(403, conf->error_pages);
-    		return buildHttpResponse("200 OK", "text/html", html);
-
-        }
+    // Replace placeholders
+    size_t pathPos = templateHtml.find("{{PATH}}");
+    while (pathPos != std::string::npos) {
+        templateHtml.replace(pathPos, 8, urlPath);
+        pathPos = templateHtml.find("{{PATH}}");
     }
-    return buildHttpResponse("403 Forbidden", "text/plain", "403 Forbidden");
+    size_t rowsPos = templateHtml.find("{{ROWS}}");
+    if (rowsPos != std::string::npos)
+        templateHtml.replace(rowsPos, 8, rows.str());
+
+    return templateHtml;
 }
