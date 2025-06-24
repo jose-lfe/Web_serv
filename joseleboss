@@ -1,0 +1,77 @@
+std::string handleDelete(const HandleRequest& req, const std::vector<ServerConfig>& _configs)
+{
+	std::string cleanPath = req.path;
+	size_t qmark = cleanPath.find('?');
+	if (qmark != std::string::npos) {
+    cleanPath = cleanPath.substr(0, qmark);
+	}
+	const ServerConfig *conf;
+	const Location* loc = findMatchingLocation(req, _configs, &conf);
+	if (!loc)
+		return buildErrorResponse(404, conf->error_pages);
+	if (!isMethodAllowed(loc, loc->methods, "DELETE"))
+		return buildErrorResponse(405, conf->error_pages);
+
+	std::string baseRoot = loc->root;
+	std::string relPath = cleanPath;
+
+	if (relPath.find(loc->path) == 0)
+		relPath = relPath.substr(loc->path.length());
+	if (!relPath.empty() && relPath[0] == '/')
+		relPath = relPath.substr(1);
+
+	std::string filePath = baseRoot;
+	if (!filePath.empty() && filePath.back() != '/')
+		filePath += "/";
+	filePath += relPath;
+
+	std::cout << "DELETE filePath: " << filePath << std::endl;
+
+	struct stat st;
+	if (stat(filePath.c_str(), &st) != 0)
+		return buildErrorResponse(404, conf->error_pages);
+	if (access(filePath.c_str(), W_OK) != 0)
+		return buildErrorResponse(403, conf->error_pages);
+	if (remove(filePath.c_str()) != 0)
+		return buildErrorResponse(500, conf->error_pages);
+
+	std::string redirectTarget = loc->path;
+	std::cout << std::endl << "reqheader is : " << req.headers.at(("User-Agent")) << std::endl;
+	return buildRedirectionResponse(redirectTarget, req.headers.at("User-Agent"));
+}
+
+std::string buildRedirectionResponse(const std::string& location,
+                                     const std::string& userAgent = "",
+                                     const std::string& status = "303 See Other") {
+    std::ostringstream response;
+    std::string body;
+    std::string contentType;
+
+    // Détection simple de curl
+    bool isCurl = userAgent.find("curl") != std::string::npos;
+
+    if (isCurl) {
+        contentType = "text/plain";
+        body = "Resource deleted. Redirecting to: " + location + "\n";
+    } else {
+        contentType = "text/html";
+        std::ostringstream htmlBody;
+        htmlBody << "<html><head><meta http-equiv=\"refresh\" content=\"1; URL=" << location << "\">"
+                 << "<title>Redirecting...</title></head><body>"
+                 << "<h1>Redirecting...</h1>"
+                 << "<p>If you're not redirected automatically, <a href=\"" << location << "\">click here</a>.</p>"
+                 << "</body></html>";
+        body = htmlBody.str();
+    }
+
+    // Construction de la réponse complète
+    response << "HTTP/1.1 " << status << "\r\n";
+    response << "Location: " << location << "\r\n";
+    response << "Content-Type: " << contentType << "\r\n";
+    response << "Content-Length: " << body.size() << "\r\n";
+    response << "Connection: close\r\n";
+    response << "\r\n";
+    response << body;
+
+    return response.str();
+}
