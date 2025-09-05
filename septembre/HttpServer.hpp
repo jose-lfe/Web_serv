@@ -5,7 +5,7 @@
 #include <iostream>
 #include "Socket.hpp"
 #include "Struct.hpp"
-#include "HandleRequest.hpp"
+#include "handleRequest.hpp"
 //#include <unordered_map>
 
 class HttpServer
@@ -14,7 +14,7 @@ private:
 	std::vector<ServerConfig> _configs;
 	std::vector<Socket*> _listenSockets;
 	std::map<int, std::string> _readBuffers;
-	std::map<int, HandleRequest> _parsedRequests;
+	std::map<int, handleRequest> _parsedRequests;
 
 public:
 	HttpServer(const std::vector<ServerConfig> &configs);

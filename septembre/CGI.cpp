@@ -1,7 +1,15 @@
 #include "CGI.hpp"
 
-std::vector<std::string> buildCgiEnv(const HandleRequest& req, const std::string& scriptPath, const Location *loc) {
+std::vector<std::string> buildCgiEnv(const handleRequest& req, const std::string& scriptPath, const Location *loc, const ServerConfig& configs) {
     std::vector<std::string> env;
+
+    if (configs.cpy_envp)
+    {
+        for (int i = 0; configs.cpy_envp[i]; ++i)
+        {
+            env.push_back(std::string(configs.cpy_envp[i]));
+        }
+    }
 
     env.push_back("REQUEST_METHOD=" + req.method);
     env.push_back("SCRIPT_FILENAME=" + scriptPath);
@@ -46,17 +54,31 @@ bool endsWith(const std::string& str, const std::string& suffix) {
 	return str.compare(str.length() - suffix.length(), suffix.length(), suffix) == 0;
 }
 
-std::string exec_cgi(const HandleRequest& req, const ServerConfig& configs, const Location *loc, std::string relPath)
-//std::string exec_cgi(const HandleRequest& req, const std::vector<ServerConfig>& configs)
+std::string get_pwd_path(const ServerConfig& configs)
+{
+    char **env = configs.cpy_envp;
+    if (!env)
+        return "";
+
+    for (int i = 0; env[i]; ++i) {
+        std::string var(env[i]);
+        if (var.find("PWD=") == 0)
+            return var.substr(4);
+    }
+    return "";
+}
+
+std::string exec_cgi(const handleRequest& req, const ServerConfig& configs, const Location *loc, std::string relPath)
+//std::string exec_cgi(const handleRequest& req, const std::vector<ServerConfig>& configs)
 {
     std::cout << "inside exec_cgi" << std::endl; // debug
-    std::string scriptPath = "/home/jose-lfe/projects/web/with_cgi/www/" + relPath;
+    std::string scriptPath = get_pwd_path(configs) + "/www/" + relPath;
     std::string interpreter = loc->cgi_path;
     std::string newbody;
     std::cout << "script path: " << scriptPath << std::endl; // debug
 
 
-    std::vector<std::string> env_vec = buildCgiEnv(req, scriptPath, loc);
+    std::vector<std::string> env_vec = buildCgiEnv(req, scriptPath, loc, configs);
     std::vector<char*> envp;
     for (size_t i = 0; i < env_vec.size(); ++i)
         envp.push_back(const_cast<char*>(env_vec[i].c_str()));

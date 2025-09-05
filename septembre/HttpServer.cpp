@@ -1,6 +1,6 @@
 #include "HttpServer.hpp"
 #include "Socket.hpp"
-#include "HandleRequest.hpp"
+#include "handleRequest.hpp"
 #include "SimpleRouter.hpp"
 #include <string>
 #include <map>
@@ -249,7 +249,7 @@ void HttpServer::handleRead(int fd, int epoll_fd) {
     std::cout << "Requête HTTP complète reçue depuis fd=" << fd << " :\n"
               << full_request << std::endl;
 
-    HandleRequest req;
+    handleRequest req;
     if (req.parse(full_request)) {
         _parsedRequests[fd] = req;
     } else {
@@ -292,7 +292,7 @@ void HttpServer::handleRead(int fd, int epoll_fd) {
 //         std::cout << "Requête HTTP reçue depuis fd=" << fd << " :\n"
 //                   << _readBuffers[fd] << std::endl;
 
-// 		HandleRequest req;
+// 		handleRequest req;
 // 		if (req.parse(_readBuffers[fd])) {
 // 			_parsedRequests[fd] = req;
 // 		}
@@ -369,14 +369,14 @@ void HttpServer::deleteSockets()
 }
 
 void HttpServer::handleWrite(int fd, int epoll_fd) {
-	std::map<int, HandleRequest>::iterator it = _parsedRequests.find(fd);
+	std::map<int, handleRequest>::iterator it = _parsedRequests.find(fd);
 	if (it == _parsedRequests.end()) {
 		std::cerr << "No parsed request for fd=" << fd << std::endl;
 		closeClient(fd, epoll_fd);
 		return;
 	}
 
-	const HandleRequest& req = it->second;
+	const handleRequest& req = it->second;
 	std::string response = SimpleRouter::route(req, _configs);
 
 	size_t totalSent = 0;
@@ -397,14 +397,14 @@ void HttpServer::handleWrite(int fd, int epoll_fd) {
 }
 
 // void HttpServer::handleWrite(int fd, int epoll_fd) {
-// 	std::map<int, HandleRequest>::iterator it = _parsedRequests.find(fd);
+// 	std::map<int, handleRequest>::iterator it = _parsedRequests.find(fd);
 // 	if (it == _parsedRequests.end()) {
 // 		std::cerr << "No parsed request for fd=" << fd << std::endl;
 // 		closeClient(fd, epoll_fd);
 // 		return;
 // 	}
 
-// 	const HandleRequest& req = it->second;
+// 	const handleRequest& req = it->second;
 // 	std::string response = SimpleRouter::route(req.method, req.path);
 
 // 	size_t totalSent = 0;

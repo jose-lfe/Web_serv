@@ -1,18 +1,18 @@
 #include "HttpServer.hpp"
-std::vector<ServerConfig> parseConfig(const std::string& path);
+std::vector<ServerConfig> parseConfig(const std::string& path, char **envp);
 
 
-int main(int argc, char **argv)
+int main(int argc, char **argv, char **envp)
 {
 	std::vector<ServerConfig> configs;
 	try
 	{
 		if (argc == 2)
 		{
-			configs = parseConfig(argv[1]);
+			configs = parseConfig(argv[1], envp);
 		}
 		else
-			configs = parseConfig("config/confwithcgi.conf");
+			configs = parseConfig("config/confwithcgi.conf", envp);
 		HttpServer server(configs);
 
 		if (!server.setupSockets())

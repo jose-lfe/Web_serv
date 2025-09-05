@@ -1,11 +1,11 @@
-#ifndef HANDLEMETHOD_HPP
-#define HANDLEMETHOD_HPP
+#ifndef handleMETHOD_HPP
+#define handleMETHOD_HPP
 
 #include "SimpleRouter.hpp"
 #include "Struct.hpp"
-std::string handleDelete(const HandleRequest& req, const std::vector<ServerConfig>& _configs);
-std::string HandleGET(const HandleRequest& req, const std::vector<ServerConfig>& _configs);
-std::string HandlePOST(const HandleRequest& req, const std::vector<ServerConfig>& _configs);
+std::string handleDelete(const handleRequest& req, const std::vector<ServerConfig>& _configs);
+std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>& _configs);
+std::string handlePOST(const handleRequest& req, const std::vector<ServerConfig>& _configs);
 
 
 

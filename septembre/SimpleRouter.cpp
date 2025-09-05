@@ -54,21 +54,21 @@ void printServerConfig(const std::vector<ServerConfig>& configs) // debug functi
 }
     
 
-std::string SimpleRouter::route(const HandleRequest& req, const std::vector<ServerConfig>& _configs)
+std::string SimpleRouter::route(const handleRequest& req, const std::vector<ServerConfig>& _configs)
 {
 	std::string method = req.method;
 	std::string path = req.path;
 
-    printServerConfig(_configs); // pour debug
+    //printServerConfig(_configs); // pour debug
     if (req.http_version != "HTTP/1.1")
             return buildErrorResponse(505, _configs[0].error_pages);
     if (method == "GET")
-        return HandleGET(req, _configs);
+        return handleGET(req, _configs);
     if (method == "POST" && extractQueryString(path).find("_method=DELETE") != std::string::npos)
         return handleDelete(req, _configs);
     if (method == "DELETE")
         return handleDelete(req, _configs);
     if (method == "POST")
-        return HandlePOST(req, _configs);
+        return handlePOST(req, _configs);
     return buildErrorResponse(501, _configs[0].error_pages);
 }

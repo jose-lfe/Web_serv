@@ -4,7 +4,7 @@
 #include <string>
 #include <map>
 #include "utils.hpp"
-#include "HandleRequest.hpp"
+#include "handleRequest.hpp"
 #include <unistd.h>
 #include <vector>
 #include <sys/types.h>
@@ -21,7 +21,7 @@
 
 class SimpleRouter {
 public:
-	static std::string route(const HandleRequest& req, const std::vector<ServerConfig>& _configs);
+	static std::string route(const handleRequest& req, const std::vector<ServerConfig>& _configs);
 	//static std::string route(const std::string& method, const std::string& path);
 };
 

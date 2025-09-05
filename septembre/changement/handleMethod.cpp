@@ -1,6 +1,4 @@
 #include "handleMethod.hpp"
-#include "handleGallery.hpp"
-
 
 std::string handleDelete(const handleRequest& req, const std::vector<ServerConfig>& _configs)
 {
@@ -16,9 +14,6 @@ std::string handleDelete(const handleRequest& req, const std::vector<ServerConfi
 	if (!isMethodAllowed(loc, loc->methods, "DELETE"))
 		return buildErrorResponse(405, conf->error_pages);
 
-
-    std::string deletePrefix = "/delete/";
-    if (cleanPath.find(deletePrefix) == 0) cleanPath = cleanPath.substr(deletePrefix.length());
 	std::string baseRoot = loc->root;
 	std::string relPath = cleanPath;
 
@@ -43,7 +38,6 @@ std::string handleDelete(const handleRequest& req, const std::vector<ServerConfi
 		return buildErrorResponse(500, conf->error_pages);
 
 	std::string redirectTarget = loc->path;
-	std::cout << "JOSE " << redirectTarget << std::endl;
 	std::cout << std::endl << "reqheader is : " << req.headers.at(("User-Agent")) << std::endl;
 	return buildRedirectionResponse(redirectTarget, req.headers.at("User-Agent"));
 }
@@ -85,12 +79,6 @@ std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>&
     filePath += relPath;
     std::cout << "GET filePath: " << filePath << std::endl; // pour debug
 
-    //envoie la gallery si cest le fichier demandé
-    if (filePath == "www/template/gallery.html")
-    {
-        std::string contentType = getMimeType(filePath);
-        return buildHttpResponse("200 OK", contentType, renderGallery(filePath, "www/photos"));
-    }
     // 4. Lire le fichier
     struct stat st;
     if (stat(filePath.c_str(), &st) != 0) {
@@ -176,7 +164,7 @@ std::string handlePOST(const handleRequest& req, const std::vector<ServerConfig>
         response += "Connection: close\r\n\r\n";
         return response;
     }
-    if (!isMethodAllowed(loc, loc->methods, "POST"))
+    if (!isMethodAllowed(loc, loc->methods, "GET"))
     {
         return buildErrorResponse(405, conf->error_pages);
     }

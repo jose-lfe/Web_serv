@@ -1,5 +1,5 @@
-#ifndef HANDLEGALLERY_HPP
-#define HANDLEGALLERY_HPP
+#ifndef handleGALLERY_HPP
+#define handleGALLERY_HPP
 
 #include <iostream>
 #include <fstream>

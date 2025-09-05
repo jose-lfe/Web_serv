@@ -13,7 +13,7 @@ std::string buildHttpResponse(const std::string& status, const std::string& cont
     return response;
 }
 
-std::string buildHtmlEchoResponse(const HandleRequest& req)
+std::string buildHtmlEchoResponse(const handleRequest& req)
 {
     std::string response;
 

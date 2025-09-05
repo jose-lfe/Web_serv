@@ -131,7 +131,7 @@ std::string removeSemicolon(const std::string& token) {
 //     return servers;
 // }
 
-std::vector<ServerConfig> parseConfig(const std::string& path) {
+std::vector<ServerConfig> parseConfig(const std::string& path, char **envp) {
     std::ifstream infile(path.c_str());
     std::string line;
     std::vector<ServerConfig> servers;
@@ -147,6 +147,7 @@ std::vector<ServerConfig> parseConfig(const std::string& path) {
 
         if (tokens[0] == "server" && tokens.size() == 2 && tokens[1] == "{") {
             current = ServerConfig();
+            current.cpy_envp = envp;
             // Ajout : initialiser index et autoindex à des valeurs par défaut
             current.index = "";
             current.autoindex = false;

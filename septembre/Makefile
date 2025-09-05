@@ -7,7 +7,7 @@ SRCS =	main.cpp\
 		CGI.cpp\
 		handleGallery.cpp\
 		handleMethod.cpp\
-		HandleRequest.cpp\
+		handleRequest.cpp\
 		HttpServer.cpp\
 		matchConfig.cpp\
 		Parser.cpp\
