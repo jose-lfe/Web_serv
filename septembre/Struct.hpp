@@ -29,6 +29,7 @@ struct Location {
 };
 
 struct ServerConfig {
+    char **cpy_envp;
     std::string host;
 	std::string root;
     std::vector<int> port;

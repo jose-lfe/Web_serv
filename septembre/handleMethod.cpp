@@ -200,16 +200,17 @@ std::string HandlePOST(const HandleRequest& req, const std::vector<ServerConfig>
         return exec_cgi(req, *conf, loc, relPath);
     }
     // filePath est un fichier donc ambigue donc erreur
-    struct stat st;
-    if (stat(filePath.c_str(), &st) != 0)
-    {
-        return buildErrorResponse(404, conf->error_pages);
-    }
-    if (S_ISREG(st.st_mode))
-    {
-        buildErrorResponse(405, conf->error_pages);
-    }
+    // struct stat st;
+    // if (stat(filePath.c_str(), &st) != 0)
+    // {
+    //     return buildErrorResponse(404, conf->error_pages);
+    // }
+    // if (S_ISREG(st.st_mode))
+    // {
+    //     buildErrorResponse(405, conf->error_pages);
+    // }
     //echo
+    std::cout << "echo ici" << std::endl;
     return buildHtmlEchoResponse(req);
 
 }
