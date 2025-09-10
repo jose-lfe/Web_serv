@@ -6,7 +6,8 @@ std::string buildHttpResponse(const std::string& status, const std::string& cont
     response += "HTTP/1.1 " + status + "\r\n";
     response += "Content-Type: " + contentType + "\r\n";
     response += "Content-Length: " + to_string(body.size()) + "\r\n";
-    response += "Connection: close\r\n";
+  //  response += std::string("Connection: ") + (keepAlive ? "keep-alive" : "close") + "\r\n";
+	response += "Connection: keep-alive";
     response += "Server: webserv/1.0\r\n";
     response += "\r\n";
     response += body;

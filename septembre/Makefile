@@ -5,6 +5,7 @@ SRCS =	main.cpp\
 		autoindex.cpp\
 		buildResponse.cpp\
 		CGI.cpp\
+		Client.cpp\
 		handleGallery.cpp\
 		handleMethod.cpp\
 		handleRequest.cpp\

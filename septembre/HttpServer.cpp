@@ -8,6 +8,7 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 #include <stdexcept>
+#include "Client.hpp"
 #include <set>
 
 HttpServer::HttpServer(const std::vector<ServerConfig> &configs) : _configs(configs) {}
@@ -49,33 +50,6 @@ bool HttpServer::setupSockets()
     return true;
 }
 
-
-// bool HttpServer::setupSockets()
-// {
-// 	std::map<int, bool> openedPorts;
-
-// 	for (size_t i = 0; i < _configs.size(); ++i)
-// 	{
-//         const ServerConfig &conf = _configs[i];
-
-	
-// 		for (size_t j = 0; j < conf.port.size(); ++j) {
-// 			int port = conf.port[j];
-
-// 			if (openedPorts[port])
-// 				continue;
-
-// 			Socket sock(conf.host, port, _configs);;
-// 			if (!sock.bindAndListen())
-// 				return false;
-
-// 			_listenSockets.push_back(std::move(sock));
-//     	    openedPorts[port] = true;
-// 		}
-// 	}
-// 	return true;
-// }
-
 #include <fcntl.h>
 
 bool setNonBlocking(int fd) {
@@ -105,7 +79,7 @@ void HttpServer::run()
             exit(1);
         }
 
-        // Optionnel: s'assurer que la socket est non bloquante
+        // Rend non bloquant
         int flags = fcntl(sockfd, F_GETFL, 0);
         if (flags == -1) {
             perror("fcntl F_GETFL");
@@ -116,9 +90,9 @@ void HttpServer::run()
             exit(1);
         }
 
-        struct epoll_event ev;
+        epoll_event ev;
         memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLIN;  // Prêt à lire sur socket d'écoute
+        ev.events = EPOLLIN | EPOLLET;  // Prêt à lire sur socket d'écoute
         ev.data.fd = sockfd;
 
         std::cout << "epoll_ctl add: fd=" << sockfd << " events=" << ev.events << std::endl;
@@ -130,6 +104,7 @@ void HttpServer::run()
     }
 
     const int MAX_EVENTS = 64;
+	const int TIMEOUT_SECONDS = 5;
     epoll_event events[MAX_EVENTS];
 
     while (true) {
@@ -139,56 +114,81 @@ void HttpServer::run()
             continue;
         }
 
+		time_t now = time(NULL);
+		for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); )
+		{
+			if (difftime(now, it->second._lastActivity) > TIMEOUT_SECONDS)
+			{
+				std::cout << "Timeout, closing fd=" << it->first << std::endl;
+				int fd = it->first;
+				++it;
+				closeClient(fd, epoll_fd);
+			}
+			else
+			++it;
+		}
+
         for (int i = 0; i < n_events; ++i) {
             int fd = events[i].data.fd;
 
             if (isListenSocket(fd)) {
                 acceptClient(fd, epoll_fd);
-            } else {
-                if (events[i].events & EPOLLIN) {
-                    handleRead(fd, epoll_fd);
-                }
-                if (events[i].events & EPOLLOUT) {
-                    handleWrite(fd, epoll_fd);
-                }
-                if (events[i].events & (EPOLLHUP | EPOLLERR)) {
-                    closeClient(fd, epoll_fd);
-                }
+				continue;
+            }
+			std::map<int, Client>::iterator it = _clients.find(fd);
+			if (it == _clients.end())
+			{
+				std::cerr << "Clients fd non trouve: " << fd << std::endl;
+				continue;
+			}
+			Client &client = it->second;
+            if (events[i].events & EPOLLIN) {
+                handleRead(fd, epoll_fd, client);
+            }
+            if (events[i].events & EPOLLOUT) {
+                handleWrite(fd, epoll_fd, client);
+            }
+            if (events[i].events & (EPOLLHUP | EPOLLERR)) {
+                closeClient(fd, epoll_fd);
+            }
             }
         }
-    }
 
     close(epoll_fd);
 }
 
-void HttpServer::handleRead(int fd, int epoll_fd) {
-    char buffer[4096];
+void HttpServer::handleRead(int fd, int epoll_fd, Client &client) {
+	
+	char buffer[4096];
     ssize_t bytesRead;
-    bool gotData = false;
 
     // Lire en boucle tant que recv > 0 (EPOLLET)
     std::cout << "Lecture des données sur fd=" << fd << std::endl; // debug
     while ((bytesRead = recv(fd, buffer, sizeof(buffer), 0)) > 0) {
-        _readBuffers[fd] += std::string(buffer, bytesRead);
+        client._bufferIn.append(buffer, bytesRead);
+		client._lastActivity = time(NULL);
         std::cout << "Reçu " << bytesRead << " octets sur fd=" << fd << std::endl; // debug
-        gotData = true;
     }
-    std::cout << "Buffer reçu (fd=" << fd << ") :\n" << _readBuffers[fd] << std::endl; // debug
+    //std::cout << "Buffer reçu (fd=" << fd << ") :\n" << client._bufferIn << std::endl; // debug
 
-    if (!gotData && (bytesRead == 0 || (bytesRead < 0 && errno != EAGAIN && errno != EWOULDBLOCK))) {
-        std::cerr << "Client closed connection or error on fd=" << fd << std::endl;
+    if (bytesRead == 0) {
+        std::cerr << "Client closed connection on fd=" << fd << std::endl;
         closeClient(fd, epoll_fd);
         return;
     }
 
+	if (client._bufferIn.empty())
+		return;
+
     // Cherche la fin des headers
-    size_t headers_end = _readBuffers[fd].find("\r\n\r\n");
+    size_t headers_end = client._bufferIn.find("\r\n\r\n");
     if (headers_end == std::string::npos)
         return; // On n'a pas encore tous les headers
 
-    std::string headers = _readBuffers[fd].substr(0, headers_end);
+    std::string headers = client._bufferIn.substr(0, headers_end);
     bool is_chunked = false;
     size_t content_length = 0;
+
     std::istringstream hstream(headers);
     std::string line;
     while (std::getline(hstream, line)) {
@@ -203,123 +203,51 @@ void HttpServer::handleRead(int fd, int epoll_fd) {
     }
 
     std::string full_request;
-    if (is_chunked) {
-        // On a tous les headers, mais on ne sait pas la taille totale du body à l'avance
-        std::string chunked_body = _readBuffers[fd].substr(headers_end + 4);
-        std::string dechunked;
-        size_t pos = 0;
-        while (true) {
-            size_t crlf = chunked_body.find("\r\n", pos);
-            if (crlf == std::string::npos) return; // attendre plus de données
-            std::string len_str = chunked_body.substr(pos, crlf - pos);
-            int chunk_size = std::strtol(len_str.c_str(), NULL, 16);
-            pos = crlf + 2;
-            if (chunk_size == 0) {
-                // Vérifie qu'on a bien le chunk final "0\r\n\r\n"
-                if (chunked_body.find("\r\n", pos) == pos) {
-                    pos += 2;
-                    if (chunked_body.find("\r\n", pos) == pos) {
-                        pos += 2;
-                    }
-                }
-                break;
-            }
-            if (chunked_body.size() < pos + chunk_size + 2) return; // pas tout reçu
-            dechunked += chunked_body.substr(pos, chunk_size);
-            pos += chunk_size + 2; // skip \r\n après chunk
-        }
-        // Supprime le header Transfer-Encoding: chunked
-        std::string new_headers;
-        std::istringstream hstream2(headers);
-        while (std::getline(hstream2, line)) {
-            if (line.find("Transfer-Encoding:") == 0 && line.find("chunked") != std::string::npos)
-                continue;
-            new_headers += line + "\r\n";
-        }
-        full_request = new_headers + "\r\n" + dechunked;
-    } else {
-        size_t total_needed = headers_end + 4 + content_length;
-        // Si Content-Length > 0, attendre tout le body
-        if (content_length > 0 && _readBuffers[fd].size() < total_needed)
-            return; // On n'a pas encore tout le body
-        // On a tout reçu : headers + body (ou juste headers pour GET)
-        full_request = _readBuffers[fd].substr(0, total_needed);
-    }
-
-    std::cout << "Requête HTTP complète reçue depuis fd=" << fd << " :\n"
-              << full_request << std::endl;
+    if (is_chunked)
+		full_request = headers + "\r\n\r\n";
+	else
+	{
+		size_t total_needed = headers_end + 4 + content_length;
+		if (client._bufferIn.size() < total_needed)
+			return;
+		full_request = client._bufferIn.substr(0, total_needed);
+	}
 
     handleRequest req;
-    if (req.parse(full_request)) {
-        _parsedRequests[fd] = req;
-    } else {
-        std::cerr << "Failed to parse HTTP request on fd=" << fd << std::endl;
-        closeClient(fd, epoll_fd);
-        _readBuffers.erase(fd);
-        return;
+    if (!req.parse(full_request)) {
+		closeClient(fd, epoll_fd);
+		return;
     }
+	client._parsedRequest = req;
 
-    req.print();
+	std::string response = SimpleRouter::route(req, _configs);
+	client._responseQueue.push_back(response);
+
+    //req.print();
 
     // Passe en mode écriture
     epoll_event ev;
-    ev.events = EPOLLOUT | EPOLLET;
+    ev.events = EPOLLET | EPOLLIN | EPOLLOUT;
     ev.data.fd = fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &ev) < 0) {
+		std::cout << "DEBUG: ICI" << std::endl;
         perror("epoll_ctl: mod to EPOLLOUT");
         closeClient(fd, epoll_fd);
     }
+	else
+	{
+		std::cout << "[DEBUG] Passage de fd=" << fd << " en mode EPOLLOUT" << std::endl;
+	}
 
     // Nettoie le buffer pour ce fd
-    _readBuffers.erase(fd);
+    client._bufferIn.erase(0, full_request.size());
 }
 
-
-// void HttpServer::handleRead(int fd, int epoll_fd) {
-//     char buffer[4096];
-//     ssize_t bytesRead = recv(fd, buffer, sizeof(buffer), 0);
-
-//     if (bytesRead <= 0) {
-//         std::cerr << "Client closed connection or error on fd=" << fd << std::endl;
-//         closeClient(fd, epoll_fd);
-//         return;
-//     }
-
-//     _readBuffers[fd] += std::string(buffer, bytesRead);
-
-//     // Vérifie si on a reçu toute la requête (en-têtes terminés)
-//     if (_readBuffers[fd].find("\r\n\r\n") != std::string::npos) {
-//         std::cout << "Requête HTTP reçue depuis fd=" << fd << " :\n"
-//                   << _readBuffers[fd] << std::endl;
-
-// 		handleRequest req;
-// 		if (req.parse(_readBuffers[fd])) {
-// 			_parsedRequests[fd] = req;
-// 		}
-// 		else {
-// 			std::cerr << "Failed to parse HTTP request on fd=" << fd << std::endl;
-// 			closeClient(fd, epoll_fd);
-// 			return ;
-// 		}
-
-// 		req.print();
-//         // ⚠️ À FAIRE : ici on ajoutera parseHeaders plus tard
-
-//         // Passe en mode écriture
-//         epoll_event ev;
-//         ev.events = EPOLLOUT;
-//         ev.data.fd = fd;
-//         if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &ev) < 0) {
-//             perror("epoll_ctl: mod to EPOLLOUT");
-//             closeClient(fd, epoll_fd);
-//         }
-//     }
-// }
 
 void HttpServer::closeClient(int fd, int epoll_fd) {
     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
     close(fd);
-    _readBuffers.erase(fd);
+    _clients.erase(fd);
     std::cout << "Connexion fermée : fd=" << fd << std::endl;
 }
 
@@ -347,6 +275,7 @@ void HttpServer::acceptClient(int listen_fd, int epoll_fd) {
     close(client_fd);
     return;
 }
+	_clients[client_fd] = Client(client_fd);
 
     epoll_event ev;
     ev.events = EPOLLIN | EPOLLET; // lecture, mode edge-triggered
@@ -355,6 +284,7 @@ void HttpServer::acceptClient(int listen_fd, int epoll_fd) {
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) < 0) {
         perror("epoll_ctl: client_fd");
         close(client_fd);
+		_clients.erase(client_fd);
         return;
     }
 
@@ -368,32 +298,65 @@ void HttpServer::deleteSockets()
 }
 }
 
-void HttpServer::handleWrite(int fd, int epoll_fd) {
-	std::map<int, handleRequest>::iterator it = _parsedRequests.find(fd);
-	if (it == _parsedRequests.end()) {
-		std::cerr << "No parsed request for fd=" << fd << std::endl;
+// void HttpServer::handleWrite(int fd, int epoll_fd) {
+// 	std::map<int, handleRequest>::iterator it = _parsedRequests.find(fd);
+// 	if (it == _parsedRequests.end()) {
+// 		std::cerr << "No parsed request for fd=" << fd << std::endl;
+// 		closeClient(fd, epoll_fd);
+// 		return;
+// 	}
+
+// 	const handleRequest& req = it->second;
+// 	std::string response = SimpleRouter::route(req, _configs);
+
+// 	size_t totalSent = 0;
+// 	size_t toSend = response.size();
+
+// 	while (totalSent < toSend) {
+// 	ssize_t bytesSent = send(fd, response.c_str() + totalSent, toSend - totalSent, 0);
+// 	if (bytesSent < 0) {
+// 		perror("send");
+// 		closeClient(fd, epoll_fd);
+// 		return;
+// 	}
+// 	totalSent += bytesSent;
+// 	}
+
+// 	closeClient(fd, epoll_fd);
+// 	_parsedRequests.erase(it);
+// }
+
+void HttpServer::handleWrite(int fd, int epoll_fd, Client &client) {
+
+	std::cout << "starting handlewrite" << std::endl;
+	while (!client._responseQueue.empty())
+	{
+		std::string &response = client._responseQueue.front();
+		ssize_t bytesSent = send(fd, response.c_str(), response.size(), 0);
+
+		if (bytesSent <= 0)
+		{
+			return;
+		}
+		client._lastActivity = time(NULL);
+		response.erase(0, bytesSent);
+
+		if (response.empty())
+			client._responseQueue.pop_front();
+		else
+			return;
+	}
+
+	if (!client._keepAlive)
+	{
 		closeClient(fd, epoll_fd);
 		return;
 	}
 
-	const handleRequest& req = it->second;
-	std::string response = SimpleRouter::route(req, _configs);
-
-	size_t totalSent = 0;
-	size_t toSend = response.size();
-
-	while (totalSent < toSend) {
-	ssize_t bytesSent = send(fd, response.c_str() + totalSent, toSend - totalSent, 0);
-	if (bytesSent < 0) {
-		perror("send");
-		closeClient(fd, epoll_fd);
-		return;
-	}
-	totalSent += bytesSent;
-	}
-
-	closeClient(fd, epoll_fd);
-	_parsedRequests.erase(it);
+	epoll_event ev;
+	ev.events = EPOLLIN | EPOLLET;
+	ev.data.fd = fd;
+	epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &ev);
 }
 
 // void HttpServer::handleWrite(int fd, int epoll_fd) {
