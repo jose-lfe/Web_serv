@@ -25,6 +25,7 @@ Location::Location() :
     path(""),
     root(""),
     index(""),
+    client_max_body_size(0),
     autoindex(false),
     upload_enable(false),
     upload_store(""),
@@ -36,6 +37,7 @@ Location::Location(const ServerConfig& config) :
     path(""),
     root(config.root), // <- ici on copie la racine du serveur
     index(config.index),
+    client_max_body_size(config.client_max_body_size),
     autoindex(config.autoindex),
     upload_enable(false),
     upload_store(""),
@@ -58,7 +60,7 @@ ServerConfig::ServerConfig()
     : host("0.0.0.0"),
       root("./"),
       port(80),
-      client_max_body_size(1000000) // fin de la liste d'init
+      client_max_body_size(0) // fin de la liste d'init
 {
     server_name.push_back("localhost"); // corps du constructeur
 }

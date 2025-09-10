@@ -17,6 +17,7 @@ struct Location {
     std::vector<std::string> methods;
     std::string root;
     std::string index;
+    size_t client_max_body_size;
     bool autoindex;
     bool upload_enable;
     std::string upload_store;

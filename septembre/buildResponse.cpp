@@ -67,6 +67,9 @@ switch (error)
     case 405:
         filePath = "./error_pages/error_405.html";
         break;
+    case 413:
+        filePath = "./error_pages/error_413.html";
+        break;
     case 500:
         filePath = "./error_pages/error_500.html";
         break;
@@ -91,6 +94,9 @@ switch (error)
         break;
     case 404: 
         status = "404 Not Found";
+        break;
+    case 413: 
+        status = "413 Payload Too Large";
         break;
     case 405:
         status = "405 Method Not Allowed";

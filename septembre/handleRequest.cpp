@@ -40,8 +40,13 @@ bool handleRequest::parse(const std::string& raw_request)
 		value.erase(end);
 
 		headers[key] = value;
+		
 	}
 
+	std::ostringstream body_stream;
+	body_stream << stream.rdbuf();
+	body = body_stream.str();
+	
 	return true;
 }
 

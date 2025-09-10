@@ -167,6 +167,17 @@ std::string handlePOST(const handleRequest& req, const std::vector<ServerConfig>
         return buildErrorResponse(404, _configs[0].error_pages);
     }
     std::cout << "Loc de POST" << loc->path << std::endl; // debug
+
+    std::map<std::string, std::string>::const_iterator it = req.headers.find("Content-Length");
+    if (it != req.headers.end() && loc->client_max_body_size != 0)
+    {
+        size_t content_length = std::strtoul(it->second.c_str(), NULL, 10);
+        if (content_length > loc->client_max_body_size)
+        {
+            return buildErrorResponse(413, conf->error_pages);
+        }
+    }
+
     // Vérifie la redirection ici
     if (!loc->redirection.empty()) {
         // 302 Found ou 301 Moved Permanently selon ton besoin

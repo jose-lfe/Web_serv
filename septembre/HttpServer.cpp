@@ -223,7 +223,7 @@ void HttpServer::handleRead(int fd, int epoll_fd, Client &client) {
 	std::string response = SimpleRouter::route(req, _configs);
 	client._responseQueue.push_back(response);
 
-    //req.print();
+    req.print();
 
     // Passe en mode écriture
     epoll_event ev;
