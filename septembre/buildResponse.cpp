@@ -1,13 +1,13 @@
 #include "buildResponse.hpp"
 
-std::string buildHttpResponse(const std::string& status, const std::string& contentType, const std::string& body)
+std::string buildHttpResponse(const std::string& status, const std::string& contentType, const std::string& body, bool keepAlive)
 {
     std::string response;
     response += "HTTP/1.1 " + status + "\r\n";
     response += "Content-Type: " + contentType + "\r\n";
     response += "Content-Length: " + to_string(body.size()) + "\r\n";
-  //  response += std::string("Connection: ") + (keepAlive ? "keep-alive" : "close") + "\r\n";
-	response += "Connection: keep-alive";
+    response += std::string("Connection: ") + (keepAlive ? "keep-alive" : "close") + "\r\n";
+	//response += "Connection: keep-alive";
     response += "Server: webserv/1.0\r\n";
     response += "\r\n";
     response += body;
@@ -118,7 +118,7 @@ switch (error)
 std::ifstream file(filePath.c_str(), std::ios::binary);
 if (!file.is_open()) {
     std::cout << filePath << std::endl;
-    return buildHttpResponse("404 Not Found", "text/html", "404 Page Not Found");
+    return buildHttpResponse("404 Not Found", "text/html", "404 Page Not Found", false);
 }
 std::ostringstream ss;
 ss << file.rdbuf();

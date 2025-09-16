@@ -28,13 +28,11 @@ std::vector<std::string> buildCgiEnv(const handleRequest& req, const std::string
     env.push_back("REMOTE_ADDR=127.0.0.1"); // à adapter si tu as l'IP du client
     env.push_back("REDIRECT_STATUS=200");
 
-    // Ajoute aussi les headers HTTP sous forme HTTP_*
     for (std::map<std::string, std::string>::const_iterator it = req.headers.begin(); it != req.headers.end(); ++it) {
         std::string key = it->first;
         std::string value = it->second;
         if (key == "Content-Type" || key == "Content-Length")
             continue;
-        // Transforme les - en _ et majuscules
         for (size_t i = 0; i < key.size(); ++i) {
             if (key[i] == '-') key[i] = '_';
             else key[i] = toupper(key[i]);
@@ -165,5 +163,5 @@ if (!req.body.empty()) {
             break;
         }
     }
-    return buildHttpResponse("200 OK", contentType, body);
+    return buildHttpResponse("200 OK", contentType, body, true);
 }

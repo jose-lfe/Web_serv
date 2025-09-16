@@ -17,7 +17,6 @@ public:
 
 	bool parse(const std::string& raw_request);
 	void print() const;
-	std::string generateResponse() const;
 };
 
 #endif

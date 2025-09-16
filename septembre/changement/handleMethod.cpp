@@ -105,7 +105,7 @@ std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>&
         ss << file.rdbuf();
         std::string body = ss.str();
 
-        return buildHttpResponse("200 OK", contentType, body);
+        return buildHttpResponse("200 OK", contentType, body, true);
     }
     else if (S_ISDIR(st.st_mode))
     {
@@ -127,7 +127,7 @@ std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>&
             std::ostringstream s;
             s << f.rdbuf();
             std::string body = s.str();
-            return buildHttpResponse("200 OK", getMimeType(indexPath), body);
+            return buildHttpResponse("200 OK", getMimeType(indexPath), body, true);
         }
         else if (loc->autoindex)
         {
@@ -136,7 +136,7 @@ std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>&
 				return buildErrorResponse(500, conf->error_pages);
 			if (html == "403")
 				return buildErrorResponse(403, conf->error_pages);
-			return buildHttpResponse("200 OK", "text/html", html);
+			return buildHttpResponse("200 OK", "text/html", html, true);
         }
     }
     return buildErrorResponse(403, conf->error_pages);

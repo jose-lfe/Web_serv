@@ -55,9 +55,7 @@ std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>&
     if (!loc) {
         return buildErrorResponse(404, _configs[0].error_pages);
     }
-    // Vérifie la redirection ici
     if (!loc->redirection.empty()) {
-        // 302 Found ou 301 Moved Permanently selon ton besoin
         std::string response = "HTTP/1.1 302 Found\r\n";
         response += "Location: " + loc->redirection + "\r\n";
         response += "Content-Length: 0\r\n";
@@ -67,10 +65,8 @@ std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>&
     if (!isMethodAllowed(loc, loc->methods, "GET")) {
         return buildErrorResponse(405, conf->error_pages);
     }
-    // 1. Déterminer le root à utiliser
     std::string baseRoot;
     baseRoot = loc->root;
-    // 2. Construire le chemin relatif à partir du path de la requête et du chemin de la location
     std::string relPath = req.path;
     if (relPath.find(loc->path) == 0)
         relPath = relPath.substr(loc->path.length());
@@ -78,20 +74,17 @@ std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>&
         relPath = relPath.substr(1);
     std::cout << std::endl << relPath << std::endl << std::endl;
 
-    // 3. Construire le chemin réel
     std::string filePath = baseRoot;
     if (!filePath.empty() && filePath[filePath.size() - 1] != '/')
         filePath += "/";
     filePath += relPath;
     std::cout << "GET filePath: " << filePath << std::endl; // pour debug
 
-    //envoie la gallery si cest le fichier demandé
     if (filePath == "www/template/gallery.html")
     {
         std::string contentType = getMimeType(filePath);
-        return buildHttpResponse("200 OK", contentType, renderGallery(filePath, "www/photos"));
+        return buildHttpResponse("200 OK", contentType, renderGallery(filePath, "www/photos"), true);
     }
-    // 4. Lire le fichier
     struct stat st;
     if (stat(filePath.c_str(), &st) != 0) {
         return buildErrorResponse(404, conf->error_pages);
@@ -100,15 +93,12 @@ std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>&
     {
         std::cout << "Is a file: " << filePath << std::endl; // pour debug
 
-        // Vérifie les droits d'accès en lecture
         if (access(filePath.c_str(), R_OK) != 0) {
             return buildErrorResponse(403, conf->error_pages);
         }
 
-        // Détermine le type MIME
         std::string contentType = getMimeType(filePath);
 
-        // Lit le fichier
         std::ifstream file(filePath.c_str(), std::ios::binary);
         if (!file.is_open()) {
             return buildErrorResponse(500, conf->error_pages);
@@ -117,14 +107,13 @@ std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>&
         ss << file.rdbuf();
         std::string body = ss.str();
 
-        return buildHttpResponse("200 OK", contentType, body);
+        return buildHttpResponse("200 OK", contentType, body, true);
     }
     else if (S_ISDIR(st.st_mode))
     {
         std::cout << "Is a directory: " << filePath << std::endl; //pour debug
         if (!loc->index.empty())
         {
-            // Si c'est un répertoire, on cherche le fichier index
             std::string indexPath = filePath;
             if (!indexPath.empty() && indexPath[indexPath.size() - 1] != '/')
                 indexPath += "/";
@@ -139,7 +128,7 @@ std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>&
             std::ostringstream s;
             s << f.rdbuf();
             std::string body = s.str();
-            return buildHttpResponse("200 OK", getMimeType(indexPath), body);
+            return buildHttpResponse("200 OK", getMimeType(indexPath), body, true);
         }
         else if (loc->autoindex)
         {
@@ -148,7 +137,7 @@ std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>&
 				return buildErrorResponse(500, conf->error_pages);
 			if (html == "403")
 				return buildErrorResponse(403, conf->error_pages);
-			return buildHttpResponse("200 OK", "text/html", html);
+			return buildHttpResponse("200 OK", "text/html", html, true);
         }
     }
     return buildErrorResponse(403, conf->error_pages);
@@ -178,9 +167,7 @@ std::string handlePOST(const handleRequest& req, const std::vector<ServerConfig>
         }
     }
 
-    // Vérifie la redirection ici
     if (!loc->redirection.empty()) {
-        // 302 Found ou 301 Moved Permanently selon ton besoin
         std::string response = "HTTP/1.1 302 Found\r\n";
         response += "Location: " + loc->redirection + "\r\n";
         response += "Content-Length: 0\r\n";
@@ -191,10 +178,8 @@ std::string handlePOST(const handleRequest& req, const std::vector<ServerConfig>
     {
         return buildErrorResponse(405, conf->error_pages);
     }
-    // 1. Déterminer le root à utiliser
     std::string baseRoot;
     baseRoot = loc->root;
-    // 2. Construire le chemin relatif à partir du path de la requête et du chemin de la location
     std::string relPath = req.path;
     if (relPath.find(loc->path) == 0)
         relPath = relPath.substr(loc->path.length());
@@ -202,7 +187,6 @@ std::string handlePOST(const handleRequest& req, const std::vector<ServerConfig>
         relPath = relPath.substr(1);
     std::cout << std::endl << relPath << std::endl << std::endl;
 
-    // 3. Construire le chemin réel
     std::string filePath = baseRoot;
     if (!filePath.empty() && filePath[filePath.size() - 1] != '/')
         filePath += "/";
