@@ -20,12 +20,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['photo'])) {
     $name = basename($_FILES['photo']['name']);
 
     if (move_uploaded_file($tmp_name, "$uploads_dir/$name")) {
-        echo "Upload réussi !";
+        echo "Upload successful!";
     } else {
-        echo "Erreur lors de l'upload.";
+        echo "Error while uploading";
     }
 } else {
-    echo "Pas de fichier uploadé.";
+    echo "No file to upload";
 }
 
 /*

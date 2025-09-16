@@ -163,5 +163,5 @@ if (!req.body.empty()) {
             break;
         }
     }
-    return buildHttpResponse("200 OK", contentType, body, true);
+    return buildHttpResponse("201 Created", contentType, body, true);
 }

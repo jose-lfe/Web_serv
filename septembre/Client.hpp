@@ -17,6 +17,7 @@ public:
 	std::string _bufferIn;
 	std::deque<std::string> _responseQueue;
 	handleRequest _parsedRequest;
+	void resetAfterWrite();
 };
 
 #endif

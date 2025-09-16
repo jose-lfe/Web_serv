@@ -92,7 +92,7 @@ void HttpServer::run()
 
         epoll_event ev;
         memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLIN | EPOLLET;  // Prêt à lire sur socket d'écoute
+        ev.events = EPOLLIN;  // Prêt à lire sur socket d'écoute
         ev.data.fd = sockfd;
 
         std::cout << "epoll_ctl add: fd=" << sockfd << " events=" << ev.events << std::endl;
@@ -104,7 +104,7 @@ void HttpServer::run()
     }
 
     const int MAX_EVENTS = 64;
-	const int TIMEOUT_SECONDS = 5;
+	const int TIMEOUT_SECONDS = 3;
     epoll_event events[MAX_EVENTS];
 
     while (true) {
@@ -122,6 +122,7 @@ void HttpServer::run()
 				std::cout << "Timeout, closing fd=" << it->first << std::endl;
 				int fd = it->first;
 				++it;
+                std::cout << "closing bc timeout" << std::endl;
 				closeClient(fd, epoll_fd);
 			}
 			else
@@ -149,6 +150,7 @@ void HttpServer::run()
                 handleWrite(fd, epoll_fd, client);
             }
             if (events[i].events & (EPOLLHUP | EPOLLERR)) {
+                std::cout << "closing bc EPOLLHUP" << std::endl;
                 closeClient(fd, epoll_fd);
             }
             }
@@ -162,21 +164,28 @@ void HttpServer::handleRead(int fd, int epoll_fd, Client &client) {
 	char buffer[4096];
     ssize_t bytesRead;
 
-    // Lire en boucle tant que recv > 0 (EPOLLET)
     std::cout << "Reading data on fd=" << fd << std::endl; // debug
-    while ((bytesRead = recv(fd, buffer, sizeof(buffer), 0)) > 0) {
+    bytesRead = recv(fd, buffer, sizeof(buffer), 0);
+    
+    if (bytesRead > 0)
+    {
         client._bufferIn.append(buffer, bytesRead);
 		client._lastActivity = time(NULL);
         std::cout << "Received " << bytesRead << " bytes on fd=" << fd << std::endl; // debug
     }
     //std::cout << "Buffer reçu (fd=" << fd << ") :\n" << client._bufferIn << std::endl; // debug
 
-    if (bytesRead == 0) {
+    else if (bytesRead == 0) {
         std::cerr << "Client closed connection on fd=" << fd << std::endl;
+        std::cout << "closing bc handleRead" << std::endl;
         closeClient(fd, epoll_fd);
         return;
     }
-
+    else
+    {
+        return;
+    }
+    
 	if (client._bufferIn.empty())
 		return;
 
@@ -215,7 +224,8 @@ void HttpServer::handleRead(int fd, int epoll_fd, Client &client) {
 
     handleRequest req;
     if (!req.parse(full_request)) {
-		closeClient(fd, epoll_fd);
+		std::cout << "closing bc req parse" << std::endl;
+        closeClient(fd, epoll_fd);
 		return;
     }
 	client._parsedRequest = req;
@@ -231,6 +241,7 @@ void HttpServer::handleRead(int fd, int epoll_fd, Client &client) {
     ev.data.fd = fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &ev) < 0) {
         perror("epoll_ctl: mod to EPOLLOUT");
+            std::cout << "closing bc epoll < 0" << std::endl;
         closeClient(fd, epoll_fd);
     }
 
@@ -243,7 +254,7 @@ void HttpServer::closeClient(int fd, int epoll_fd) {
     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
     close(fd);
     _clients.erase(fd);
-    std::cout << "Connexion fermée : fd=" << fd << std::endl;
+    std::cout << "Connection closed : fd=" << fd << std::endl;
 }
 
 bool HttpServer::isListenSocket(int fd) const {
@@ -297,6 +308,7 @@ void HttpServer::deleteSockets()
 void HttpServer::handleWrite(int fd, int epoll_fd, Client &client) {
 
 	std::cout << "starting handlewrite" << std::endl;
+    
 	while (!client._responseQueue.empty())
 	{
 		std::string &response = client._responseQueue.front();
@@ -317,13 +329,9 @@ void HttpServer::handleWrite(int fd, int epoll_fd, Client &client) {
 
 	if (!client._keepAlive)
 	{
+        std::cout << "closing bc !keepAlive" << std::endl;
 		closeClient(fd, epoll_fd);
 		return;
 	}
-
-	epoll_event ev;
-	ev.events = EPOLLIN | EPOLLET;
-	ev.data.fd = fd;
-	epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &ev);
 }
 
