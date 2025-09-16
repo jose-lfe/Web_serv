@@ -2,7 +2,7 @@
 #include "handleGallery.hpp"
 
 
-std::string handleDelete(const handleRequest& req, const std::vector<ServerConfig>& _configs)
+std::string handleDelete(const handleRequest& req, const std::vector<ServerConfig>& _configs, int port)
 {
 	std::string cleanPath = req.path;
 	size_t qmark = cleanPath.find('?');
@@ -10,7 +10,7 @@ std::string handleDelete(const handleRequest& req, const std::vector<ServerConfi
     cleanPath = cleanPath.substr(0, qmark);
 	}
 	const ServerConfig *conf;
-	const Location* loc = findMatchingLocation(req, _configs, &conf);
+	const Location* loc = findMatchingLocation(req, _configs, &conf, port);
 	if (!loc)
 		return buildErrorResponse(404, conf->error_pages);
 	if (!isMethodAllowed(loc, loc->methods, "DELETE"))
@@ -48,10 +48,10 @@ std::string handleDelete(const handleRequest& req, const std::vector<ServerConfi
 	return buildRedirectionResponse(redirectTarget, req.headers.at("User-Agent"));
 }
 
-std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>& _configs)
+std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>& _configs, int port)
 {
     const ServerConfig* conf;
-    const Location* loc = findMatchingLocation(req, _configs, &conf);
+    const Location* loc = findMatchingLocation(req, _configs, &conf, port);
     if (!loc) {
         return buildErrorResponse(404, _configs[0].error_pages);
     }
@@ -143,7 +143,7 @@ std::string handleGET(const handleRequest& req, const std::vector<ServerConfig>&
     return buildErrorResponse(403, conf->error_pages);
 }
 
-std::string handlePOST(const handleRequest& req, const std::vector<ServerConfig>& _configs)
+std::string handlePOST(const handleRequest& req, const std::vector<ServerConfig>& _configs, int port)
 {
     /*
     le but:
@@ -151,7 +151,7 @@ std::string handlePOST(const handleRequest& req, const std::vector<ServerConfig>
     sinon ca deviendra une sorte de echo
     */
        const ServerConfig* conf;
-    const Location* loc = findMatchingLocation(req, _configs, &conf);
+    const Location* loc = findMatchingLocation(req, _configs, &conf, port);
     if (!loc) {
         return buildErrorResponse(404, _configs[0].error_pages);
     }

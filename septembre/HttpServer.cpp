@@ -133,7 +133,13 @@ void HttpServer::run()
             int fd = events[i].data.fd;
 
             if (isListenSocket(fd)) {
-                acceptClient(fd, epoll_fd);
+				int targetPort = 0;
+				for (size_t i = 0; i < _listenSockets.size(); ++i)
+					if (_listenSockets[i]->getFd() == fd)
+					{
+						targetPort = _listenSockets[i]->getPort(); 
+					}
+                acceptClient(fd, epoll_fd, targetPort);
 				continue;
             }
 			std::map<int, Client>::iterator it = _clients.find(fd);
@@ -173,7 +179,6 @@ void HttpServer::handleRead(int fd, int epoll_fd, Client &client) {
 		client._lastActivity = time(NULL);
         std::cout << "Received " << bytesRead << " bytes on fd=" << fd << std::endl; // debug
     }
-    //std::cout << "Buffer reçu (fd=" << fd << ") :\n" << client._bufferIn << std::endl; // debug
 
     else if (bytesRead == 0) {
         std::cerr << "Client closed connection on fd=" << fd << std::endl;
@@ -181,7 +186,7 @@ void HttpServer::handleRead(int fd, int epoll_fd, Client &client) {
         closeClient(fd, epoll_fd);
         return;
     }
-    else
+    else if (bytesRead == -1)
     {
         return;
     }
@@ -189,10 +194,9 @@ void HttpServer::handleRead(int fd, int epoll_fd, Client &client) {
 	if (client._bufferIn.empty())
 		return;
 
-    // Cherche la fin des headers
     size_t headers_end = client._bufferIn.find("\r\n\r\n");
     if (headers_end == std::string::npos)
-        return; // On n'a pas encore tous les headers
+        return;
 
     std::string headers = client._bufferIn.substr(0, headers_end);
     bool is_chunked = false;
@@ -230,12 +234,11 @@ void HttpServer::handleRead(int fd, int epoll_fd, Client &client) {
     }
 	client._parsedRequest = req;
 
-	std::string response = SimpleRouter::route(req, _configs);
+	std::string response = SimpleRouter::route(req, _configs, client._port);
 	client._responseQueue.push_back(response);
 
     req.print();
 
-    // Passe en mode écriture
     epoll_event ev;
     ev.events = EPOLLET | EPOLLIN | EPOLLOUT;
     ev.data.fd = fd;
@@ -245,7 +248,6 @@ void HttpServer::handleRead(int fd, int epoll_fd, Client &client) {
         closeClient(fd, epoll_fd);
     }
 
-    // Nettoie le buffer pour ce fd
     client._bufferIn.erase(0, full_request.size());
 }
 
@@ -266,7 +268,7 @@ bool HttpServer::isListenSocket(int fd) const {
 	return false;
 }
 
-void HttpServer::acceptClient(int listen_fd, int epoll_fd) {
+void HttpServer::acceptClient(int listen_fd, int epoll_fd, int port) {
     sockaddr_in client_addr;
     socklen_t addr_len = sizeof(client_addr);
     int client_fd = accept(listen_fd, (sockaddr*)&client_addr, &addr_len);
@@ -275,16 +277,15 @@ void HttpServer::acceptClient(int listen_fd, int epoll_fd) {
         return;
     }
 
-    // Optionnel : rendre non-bloquant ici (tu peux ajouter ça plus tard)
     if (!setNonBlocking(client_fd)) {
     perror("fcntl client_fd O_NONBLOCK");
     close(client_fd);
     return;
 }
-	_clients[client_fd] = Client(client_fd);
+	_clients[client_fd] = Client(client_fd, port);
 
     epoll_event ev;
-    ev.events = EPOLLIN | EPOLLET; // lecture, mode edge-triggered
+    ev.events = EPOLLIN;
     ev.data.fd = client_fd;
 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) < 0) {

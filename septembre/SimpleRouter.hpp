@@ -21,7 +21,7 @@
 
 class SimpleRouter {
 public:
-	static std::string route(const handleRequest& req, const std::vector<ServerConfig>& _configs);
+	static std::string route(const handleRequest& req, const std::vector<ServerConfig>& _configs, int port);
 	//static std::string route(const std::string& method, const std::string& path);
 };
 

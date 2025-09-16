@@ -6,9 +6,9 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <dirent.h>     // Pour DIR, opendir, readdir, closedir
-#include <sys/stat.h>   // Pour stat, S_ISDIR
-#include <ctime>        // Pour strftime, localtime
+#include <dirent.h>
+#include <sys/stat.h>
+#include <ctime>
 #include <cstring>
 
 

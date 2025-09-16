@@ -26,7 +26,7 @@ public:
 	void handleWrite(int fd, int epoll_fd, Client &client);
 	void closeClient(int fd, int epoll_fd);
 	bool isListenSocket(int fd) const;
-	void acceptClient(int listen_fd, int epoll_fd);
+	void acceptClient(int listen_fd, int epoll_fd, int port);
 	void deleteSockets();
 
 

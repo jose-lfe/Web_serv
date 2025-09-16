@@ -15,17 +15,16 @@ std::vector<std::string> buildCgiEnv(const handleRequest& req, const std::string
     env.push_back("SCRIPT_FILENAME=" + scriptPath);
     env.push_back("PATH_INFO=" + req.path);
     env.push_back("UPLOAD_DIR=" + loc->upload_store);
-    env.push_back("SCRIPT_NAME=" + req.path); // ok tres certainement / ou pas peut etre faire l'inverse de la ligne du bas
-    env.push_back("QUERY_STRING=" + extractQueryString(req.path)); // à parser depuis l'URL si besoin
+    env.push_back("SCRIPT_NAME=" + req.path);
+    env.push_back("QUERY_STRING=" + extractQueryString(req.path));
     env.push_back("CONTENT_TYPE=" + trim(getHeaderValue(req.headers, "Content-Type")));
     env.push_back("CONTENT_LENGTH=" + to_string(req.body.size()));
-    //env.push_back("CONTENT_LENGTH=" + trim(getHeaderValue(req.headers, "Content-Length")));
     env.push_back("SERVER_PROTOCOL=HTTP/1.1");
     env.push_back("GATEWAY_INTERFACE=CGI/1.1");
     env.push_back("SERVER_SOFTWARE=webserv");
     env.push_back("SERVER_NAME=localhost");
     env.push_back("SERVER_PORT=8080");
-    env.push_back("REMOTE_ADDR=127.0.0.1"); // à adapter si tu as l'IP du client
+    env.push_back("REMOTE_ADDR=127.0.0.1");
     env.push_back("REDIRECT_STATUS=200");
 
     for (std::map<std::string, std::string>::const_iterator it = req.headers.begin(); it != req.headers.end(); ++it) {
@@ -67,7 +66,6 @@ std::string get_pwd_path(const ServerConfig& configs)
 }
 
 std::string exec_cgi(const handleRequest& req, const ServerConfig& configs, const Location *loc, std::string relPath)
-//std::string exec_cgi(const handleRequest& req, const std::vector<ServerConfig>& configs)
 {
     std::cout << "inside exec_cgi" << std::endl; // debug
     std::string scriptPath = get_pwd_path(configs) + "/www/" + relPath;
@@ -98,7 +96,6 @@ std::string exec_cgi(const handleRequest& req, const ServerConfig& configs, cons
     }
 
     if (pid == 0) {
-        // Enfant
         dup2(in_pipe[0], STDIN_FILENO);
         dup2(out_pipe[1], STDOUT_FILENO);
         close(in_pipe[0]);
@@ -110,7 +107,6 @@ std::string exec_cgi(const handleRequest& req, const ServerConfig& configs, cons
         exit(1);
     }
 
-    // Parent
     close(in_pipe[0]);
     close(out_pipe[1]);
 
@@ -119,11 +115,17 @@ if (!req.body.empty()) {
     size_t total_written = 0;
     while (total_written < req.body.size()) {
         ssize_t written = write(in_pipe[1], req.body.c_str() + total_written, req.body.size() - total_written);
-        if (written < 0) {
-            perror("write to CGI stdin");
-            break;
-        }
-        total_written += written;
+        if (written > 0)
+			total_written += written;
+		else if (written == 0) {
+			std::cerr << "write returned 0, stopping write to CGI pipe (fd= " << in_pipe[1];
+			break;
+		}
+		else if (written == -1)
+		{
+			std::cerr << "write returned -1, stopping write on pipe fd=." << in_pipe[1] << std::endl;
+			break;
+		}
     }
     std::cerr << "Total written to CGI stdin: " << total_written << " bytes" << std::endl;
 }
